@@ -5,6 +5,7 @@
     "author": "Sandeep K <sandeepsuvit@gmail.com>",
     "repository": "https://github.com/needle-innovision/nestjs-tenancy",
     "license": "MIT",
+    "private": false,
     "scripts": {
         "lint": "eslint \"lib/**/*.ts\" --fix",
         "format": "prettier \"lib/**/*.ts\" --write",
