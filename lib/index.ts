@@ -1,3 +1,4 @@
+export * from './tenancy.constants';
 export * from './types';
 export * from './interfaces';
 export * from './decorators';
