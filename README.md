@@ -22,7 +22,7 @@ import { CatsModule } from "./cat.module.ts";
 @Module({
   imports: [
     TenancyModule.forRoot({
-        tenantIdentifier: 'X-TenantId',
+        tenantIdentifier: 'X-TENANT-ID',
         options: {},
         uri: (tenantId: string) => `mongodb://localhost/test-tenant-${tenantId}`,
     }),
