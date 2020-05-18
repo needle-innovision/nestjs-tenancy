@@ -22,7 +22,7 @@ describe('CatTenancy', () => {
         const createDto = { name: 'Nest', breed: 'Maine coon', age: 5 };
         request(server)
             .post('/cats')
-            .set('X-TenantId', 'cats')
+            .set('X-TENANT-ID', 'cats')
             .send(createDto)
             .expect(201)
             .end((err, { body }) => {
