@@ -61,7 +61,7 @@ Inject Cat for `CatsModule`
 
 ```typescript
 import { Module } from '@nestjs/common';
-import { TenancyModule } from '../../../lib';
+import { TenancyModule } from '@needle-innovision/nestjs-tenancy';
 import { CatsController } from './cats.controller';
 import { CatsService } from './cats.service';
 import { Cat, CatSchema } from './schemas/cat.schema';
@@ -82,7 +82,7 @@ Get the cat model in a service
 
 ```typescript
 import { Injectable } from '@nestjs/common';
-import { InjectModel } from '@nestjs/mongoose';
+import { InjectTenancyModel } from '@needle-innovision/nestjs-tenancy';
 import { Model } from 'mongoose';
 import { CreateCatDto } from './dto/create-cat.dto';
 import { Cat } from './schemas/cat.schema';
@@ -90,7 +90,7 @@ import { Cat } from './schemas/cat.schema';
 @Injectable()
 export class CatsService {
     constructor(
-        @InjectModel(Cat.name) private readonly catModel: Model<Cat>
+        @InjectTenancyModel(Cat.name) private readonly catModel: Model<Cat>
     ) { }
 
     async create(createCatDto: CreateCatDto): Promise<Cat> {
