@@ -226,7 +226,7 @@ import { CatsModule } from "./cat.module.ts";
 import { ConfigModule, ConfigService } from '@nestjs/config';
 import configuration from './config';
 import { TenantModule } from './tenant/tenant.module';
-import { TenantValidator } from './tenant/validators/tenant-validator';
+import { CustomTenantValidator } from './tenant/validators/custom-tenant.validator';
 
 @Module({
   imports: [
@@ -243,7 +243,7 @@ import { TenantValidator } from './tenant/validators/tenant-validator';
     // Tenant async configuration
     TenancyModule.forRootAsync({
       imports: [TenantModule],
-      useFactory: async (cfs: ConfigService, tVal: TenantValidator) => {
+      useFactory: async (cfs: ConfigService, tVal: CustomTenantValidator) => {
         return {
           // Base tenant configurations
           tenantIdentifier: 'X-TENANT-ID',
@@ -253,7 +253,7 @@ import { TenantValidator } from './tenant/validators/tenant-validator';
           validator: (tenantId: string) => tVal.setTenantId(tenantId),
         }
       },
-      inject: [ConfigService, TenantValidator],
+      inject: [ConfigService, CustomTenantValidator],
     }),
     CatsModule,
   ],
