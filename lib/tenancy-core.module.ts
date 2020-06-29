@@ -48,7 +48,7 @@ export class TenancyCoreModule implements OnApplicationShutdown {
                 connMap: ConnectionMap,
                 modelDefMap: ModelDefinitionMap,
             ): Promise<Connection> => {
-                return this.getConnection(tenantId, moduleOptions, connMap, modelDefMap);
+                return await this.getConnection(tenantId, moduleOptions, connMap, modelDefMap);
             },
             inject: [
                 TENANT_CONTEXT,
@@ -101,7 +101,7 @@ export class TenancyCoreModule implements OnApplicationShutdown {
                 connMap: ConnectionMap,
                 modelDefMap: ModelDefinitionMap,
             ): Promise<Connection> => {
-                return this.getConnection(tenantId, moduleOptions, connMap, modelDefMap);
+                return await this.getConnection(tenantId, moduleOptions, connMap, modelDefMap);
             },
             inject: [
                 TENANT_CONTEXT,
@@ -159,24 +159,39 @@ export class TenancyCoreModule implements OnApplicationShutdown {
         req: Request,
         moduleOptions: TenancyModuleOptions,
     ): string {
+        let tenantId = '';
+
         if (!moduleOptions) {
             throw new HttpException(`Tenant options are mandatory`, HttpStatus.BAD_REQUEST);
         }
 
         // Extract the tenant idetifier
-        const { tenantIdentifier = null } = moduleOptions;
+        const {
+            tenantIdentifier = null,
+            isTenantFromSubdomain = false,
+        } = moduleOptions;
 
-        // Validate if tenant identifier token is present
-        if (!tenantIdentifier) {
-            throw new HttpException(`${tenantIdentifier} is mandatory`, HttpStatus.BAD_REQUEST);
-        }
+        // Pull the tenant id from the subdomain
+        if (isTenantFromSubdomain) {
+            tenantId = req.subdomains[0] || '';
 
-        // Get the tenant id from the request
-        const tenantId = req.get(`${tenantIdentifier}`);
-        
-        // Validate if tenant id is present
-        if (!tenantId) {
-            throw new HttpException(`${tenantIdentifier} is not supplied`, HttpStatus.BAD_REQUEST);
+            // Validate if tenant identifier token is present
+            if (tenantId === '') {
+                throw new HttpException(`Tenant ID is mandatory`, HttpStatus.BAD_REQUEST);
+            }
+        } else {
+            // Validate if tenant identifier token is present
+            if (!tenantIdentifier) {
+                throw new HttpException(`${tenantIdentifier} is mandatory`, HttpStatus.BAD_REQUEST);
+            }
+
+            // Get the tenant id from the request
+            tenantId = req.get(`${tenantIdentifier}`) || '';
+
+            // Validate if tenant id is present
+            if (tenantId === '') {
+                throw new HttpException(`${tenantIdentifier} is not supplied`, HttpStatus.BAD_REQUEST);
+            }
         }
 
         return tenantId;
@@ -191,15 +206,20 @@ export class TenancyCoreModule implements OnApplicationShutdown {
      * @param {TenancyModuleOptions} moduleOptions
      * @param {ConnectionMap} connMap
      * @param {ModelDefinitionMap} modelDefMap
-     * @returns
+     * @returns {Promise<Connection>}
      * @memberof TenancyCoreModule
      */
-    private static getConnection(
+    private static async getConnection(
         tenantId: string,
         moduleOptions: TenancyModuleOptions,
         connMap: ConnectionMap,
         modelDefMap: ModelDefinitionMap,
-    ): Connection {
+    ): Promise<Connection> {
+        // Check if validator is set, if so call the `validate` method on it
+        if (moduleOptions.validator) {
+            await moduleOptions.validator(tenantId).validate();
+        }
+        
         // Check if tenantId exist in the connection map
         const exists = connMap.has(tenantId);
 
@@ -212,7 +232,7 @@ export class TenancyCoreModule implements OnApplicationShutdown {
         const connection = createConnection(moduleOptions.uri(tenantId), {
             useNewUrlParser: true,
             useUnifiedTopology: true,
-            ...moduleOptions.options,
+            ...moduleOptions.options(),
         });
 
         // Attach connection to the models passed in the map
