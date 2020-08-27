@@ -232,7 +232,7 @@ export class TenancyCoreModule implements OnApplicationShutdown {
         const connection = createConnection(moduleOptions.uri(tenantId), {
             useNewUrlParser: true,
             useUnifiedTopology: true,
-            ...moduleOptions.options(),
+            ...moduleOptions.options,
         });
 
         // Attach connection to the models passed in the map
