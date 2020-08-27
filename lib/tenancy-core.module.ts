@@ -186,7 +186,11 @@ export class TenancyCoreModule implements OnApplicationShutdown {
             }
 
             // Get the tenant id from the request
-            tenantId = req.get(`${tenantIdentifier}`) || '';
+            if (req.headers) {
+                tenantId = req.headers[`${tenantIdentifier}`] || '';
+            } else {
+                tenantId = req.get(`${tenantIdentifier}`) || '';
+            }    
 
             // Validate if tenant id is present
             if (tenantId === '') {
