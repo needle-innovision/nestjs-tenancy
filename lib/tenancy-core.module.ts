@@ -1,4 +1,4 @@
-import { DynamicModule, Global, HttpException, HttpStatus, Module, OnApplicationShutdown, Provider, Scope } from '@nestjs/common';
+import { BadRequestException, DynamicModule, Global, Module, OnApplicationShutdown, Provider, Scope } from '@nestjs/common';
 import { Type } from '@nestjs/common/interfaces';
 import { ModuleRef, REQUEST } from '@nestjs/core';
 import { Request } from 'express';
@@ -162,7 +162,7 @@ export class TenancyCoreModule implements OnApplicationShutdown {
         let tenantId = '';
 
         if (!moduleOptions) {
-            throw new HttpException(`Tenant options are mandatory`, HttpStatus.BAD_REQUEST);
+            throw new BadRequestException(`Tenant options are mandatory`);
         }
 
         // Extract the tenant idetifier
@@ -173,24 +173,27 @@ export class TenancyCoreModule implements OnApplicationShutdown {
 
         // Pull the tenant id from the subdomain
         if (isTenantFromSubdomain) {
-            tenantId = req.subdomains[0] || '';
+            // Check for multi-level subdomains and return only the first name
+            if (req.subdomains instanceof Array && req.subdomains.length > 0) {
+                tenantId = req.subdomains[req.subdomains.length - 1];
+            }
 
             // Validate if tenant identifier token is present
-            if (tenantId === '') {
-                throw new HttpException(`Tenant ID is mandatory`, HttpStatus.BAD_REQUEST);
+            if (this.isEmpty(tenantId)) {
+                throw new BadRequestException(`Tenant ID is mandatory`);
             }
         } else {
             // Validate if tenant identifier token is present
             if (!tenantIdentifier) {
-                throw new HttpException(`${tenantIdentifier} is mandatory`, HttpStatus.BAD_REQUEST);
+                throw new BadRequestException(`${tenantIdentifier} is mandatory`);
             }
 
             // Get the tenant id from the request
             tenantId = req.get(`${tenantIdentifier}`) || '';
 
             // Validate if tenant id is present
-            if (tenantId === '') {
-                throw new HttpException(`${tenantIdentifier} is not supplied`, HttpStatus.BAD_REQUEST);
+            if (this.isEmpty(tenantId)) {
+                throw new BadRequestException(`${tenantIdentifier} is not supplied`);
             }
         }
 
@@ -357,5 +360,17 @@ export class TenancyCoreModule implements OnApplicationShutdown {
                 await optionsFactory.createTenancyOptions(),
             inject,
         };
+    }
+
+    /**
+     * Check if the object is empty or not
+     *
+     * @private
+     * @param {*} obj
+     * @returns
+     * @memberof TenancyCoreModule
+     */
+    private static isEmpty(obj: any) {
+        return !obj || !Object.keys(obj).some(x => obj[x] !== void 0);
     }
 }

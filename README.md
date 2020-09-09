@@ -4,6 +4,9 @@
 
 [Mongoose](http://mongoosejs.com/) multitenancy module for [Nest](https://github.com/nestjs/nest).
 
+### Note
+Currently supported only with Nest Express adaptor.
+
 ## Installation
 
 ```bash
