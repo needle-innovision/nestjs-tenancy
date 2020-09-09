@@ -161,7 +161,7 @@ export class CustomTenantValidator implements TenancyValidator {
      * @returns
      * @memberof CustomTenantValidator
      */
-    setTenantId(tenantId: string): TenantValidator {
+    setTenantId(tenantId: string): TenancyValidator {
         this._tenantId = tenantId;
         return this; // Make sure to return the instance of the class back here.
     }
@@ -186,7 +186,7 @@ export class CustomTenantValidator implements TenancyValidator {
 
 Export the validator from your tenant module
 
-**app.module.ts**
+**tenant.module.ts**
 
 ```typescript
 import { Module } from '@nestjs/common';
@@ -213,6 +213,18 @@ import { CustomTenantValidator } from './validators/custom-tenant.validator';
   ]
 })
 export class TenantModule {}
+```
+
+Export the database configuration
+
+**config.ts**
+
+```
+export default () => ({
+    database: {
+        uri: process.env.MONGO_URI
+    }
+});
 ```
 
 Finally you will also need to modify the module configuration.
@@ -247,7 +259,7 @@ import { CustomTenantValidator } from './tenant/validators/custom-tenant.validat
         return {
           // Base tenant configurations
           tenantIdentifier: 'X-TENANT-ID',
-          options: {},
+          options: () => {},
           uri: (tenantId: string) => `mongodb://localhost/test-tenant-${tenantId}`,
           // Custom validator to check if the tenant exist in common database
           validator: (tenantId: string) => tVal.setTenantId(tenantId),
@@ -278,7 +290,7 @@ import { CatsModule } from "./cat.module.ts";
     TenancyModule.forRoot({
         // This will allow the library to extract the subdomain as tenant id
         isTenantFromSubdomain: true,
-        options: {},
+        options: () => {},
         uri: (tenantId: string) => `mongodb://localhost/test-tenant-${tenantId}`,
     }),
     CatsModule,
