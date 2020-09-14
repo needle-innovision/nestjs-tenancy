@@ -140,6 +140,8 @@ Let's say you want to handle a validation check to see if your tenant is registe
 this by implementing the `TenancyValidator` interface and writing your own validation logic inside
 the `validate` method. The library invokes this method internally.
 
+### Note: Here we assume that `X-TENANT-ID` is passed in the request header so that its available for the validator
+
 **custom-tenant.validator.ts**
 
 ```typescript
