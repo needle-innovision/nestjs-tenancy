@@ -193,7 +193,7 @@ export class TenancyCoreModule implements OnApplicationShutdown {
                 throw new BadRequestException(`${tenantIdentifier} is mandatory`);
             }
 
-            return TenancyCoreModule.getTenantFromRequest(isFastifyAdaptor, req, tenantIdentifier);
+            return this.getTenantFromRequest(isFastifyAdaptor, req, tenantIdentifier);
         }
     }
     
