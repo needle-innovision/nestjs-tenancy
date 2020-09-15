@@ -223,6 +223,7 @@ export class TenancyCoreModule implements OnApplicationShutdown {
         if (this.isEmpty(tenantId)) {
             throw new BadRequestException(`${tenantIdentifier} is not supplied`);
         }
+        
         return tenantId;
     }
 
