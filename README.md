@@ -1,5 +1,15 @@
 # nestjs-tenancy
 
+<p align="center">
+  A simple easy to use multitenancy module for NestJs and Mongoose
+</p>
+
+<p align="center">
+<a href="https://www.npmjs.com/~sandeepsuvit" target="_blank"><img src="https://img.shields.io/npm/v/@needle-innovision/nestjs-tenancy.svg" alt="NPM Version" /></a>
+<a href="https://www.npmjs.com/~sandeepsuvit" target="_blank"><img src="https://img.shields.io/npm/v/@needle-innovision/nestjs-tenancy.svg" alt="Package License" /></a>
+<a href="https://www.npmjs.com/~sandeepsuvit" target="_blank"><img src="https://img.shields.io/npm/v/@needle-innovision/nestjs-tenancy.svg" alt="NPM Downloads" /></a>
+</p>
+
 ## Description
 
 [Mongoose](http://mongoosejs.com/) multitenancy module for [Nest](https://github.com/nestjs/nest).
