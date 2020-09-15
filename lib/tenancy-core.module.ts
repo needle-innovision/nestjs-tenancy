@@ -1,10 +1,10 @@
 import { BadRequestException, DynamicModule, Global, Module, OnApplicationShutdown, Provider, Scope } from '@nestjs/common';
 import { Type } from '@nestjs/common/interfaces';
-import { ModuleRef, REQUEST } from '@nestjs/core';
+import { HttpAdapterHost, ModuleRef, REQUEST } from '@nestjs/core';
 import { Request } from 'express';
 import { Connection, createConnection } from 'mongoose';
 import { TenancyModuleAsyncOptions, TenancyModuleOptions, TenancyOptionsFactory } from './interfaces';
-import { CONNECTION_MAP, MODEL_DEFINITION_MAP, TENANT_CONNECTION, TENANT_CONTEXT, TENANT_MODULE_OPTIONS } from './tenancy.constants';
+import { CONNECTION_MAP, DEFAULT_HTTP_ADAPTER_HOST, MODEL_DEFINITION_MAP, TENANT_CONNECTION, TENANT_CONTEXT, TENANT_MODULE_OPTIONS } from './tenancy.constants';
 import { ConnectionMap, ModelDefinitionMap } from './types';
 
 @Global()
@@ -39,6 +39,9 @@ export class TenancyCoreModule implements OnApplicationShutdown {
         /* Tenant Context */
         const tenantContextProvider = this.createTenantContextProvider();
 
+        /* Http Adaptor */
+        const httpAdapterHost = this.createHttpAdapterProvider();
+
         /* Tenant Connection */
         const tenantConnectionProvider = {
             provide: TENANT_CONNECTION,
@@ -64,6 +67,7 @@ export class TenancyCoreModule implements OnApplicationShutdown {
             connectionMapProvider,
             modelDefinitionMapProvider,
             tenantConnectionProvider,
+            httpAdapterHost,
         ];
 
         return {
@@ -91,6 +95,9 @@ export class TenancyCoreModule implements OnApplicationShutdown {
 
         /* Tenant Context */
         const tenantContextProvider = this.createTenantContextProvider();
+
+        /* Http Adaptor */
+        const httpAdapterHost = this.createHttpAdapterProvider();
         
         /* Tenant Connection */
         const tenantConnectionProvider = {
@@ -120,6 +127,7 @@ export class TenancyCoreModule implements OnApplicationShutdown {
             connectionMapProvider,
             modelDefinitionMapProvider,
             tenantConnectionProvider,
+            httpAdapterHost,
         ];
 
         return {
@@ -152,14 +160,17 @@ export class TenancyCoreModule implements OnApplicationShutdown {
      * @static
      * @param {Request} req
      * @param {TenancyModuleOptions} moduleOptions
+     * @param {HttpAdapterHost} adapterHost
      * @returns {string}
      * @memberof TenancyCoreModule
      */
     private static getTenant(
         req: Request,
         moduleOptions: TenancyModuleOptions,
+        adapterHost: HttpAdapterHost,
     ): string {
-        let tenantId = '';
+        // Check if the adaptor is fastify
+        const isFastifyAdaptor = this.adapterIsFastify(adapterHost);
 
         if (!moduleOptions) {
             throw new BadRequestException(`Tenant options are mandatory`);
@@ -173,33 +184,82 @@ export class TenancyCoreModule implements OnApplicationShutdown {
 
         // Pull the tenant id from the subdomain
         if (isTenantFromSubdomain) {
-            // Check for multi-level subdomains and return only the first name
-            if (req.subdomains instanceof Array && req.subdomains.length > 0) {
-                tenantId = req.subdomains[req.subdomains.length - 1];
-            }
 
-            // Validate if tenant identifier token is present
-            if (this.isEmpty(tenantId)) {
-                throw new BadRequestException(`Tenant ID is mandatory`);
-            }
+            return this.getTenantFromSubdomain(isFastifyAdaptor, req);
+
         } else {
             // Validate if tenant identifier token is present
             if (!tenantIdentifier) {
                 throw new BadRequestException(`${tenantIdentifier} is mandatory`);
             }
 
+            return this.getTenantFromRequest(isFastifyAdaptor, req, tenantIdentifier);
+        }
+    }
+    
+    /**
+     * Get the Tenant information from the request object
+     *
+     * @private
+     * @static
+     * @param {boolean} isFastifyAdaptor
+     * @param {Request} req
+     * @param {string} tenantIdentifier
+     * @returns
+     * @memberof TenancyCoreModule
+     */
+    private static getTenantFromRequest(isFastifyAdaptor: boolean, req: Request, tenantIdentifier: string) {
+        let tenantId = '';
+
+        if (isFastifyAdaptor) { // For Fastify
+            // Get the tenant id from the header
+            tenantId = req.headers[`${tenantIdentifier || ''}`.toLowerCase()]?.toString() || '';
+        } else { // For Express - Default
             // Get the tenant id from the request
             tenantId = req.get(`${tenantIdentifier}`) || '';
+        }
 
-            // Validate if tenant id is present
-            if (this.isEmpty(tenantId)) {
-                throw new BadRequestException(`${tenantIdentifier} is not supplied`);
+        // Validate if tenant id is present
+        if (this.isEmpty(tenantId)) {
+            throw new BadRequestException(`${tenantIdentifier} is not supplied`);
+        }
+        return tenantId;
+    }
+
+    /**
+     * Get the Tenant information from the reqest header
+     *
+     * @private
+     * @static
+     * @param {boolean} isFastifyAdaptor
+     * @param {Request} req
+     * @returns
+     * @memberof TenancyCoreModule
+     */
+    private static getTenantFromSubdomain(isFastifyAdaptor: boolean, req: Request) {
+        let tenantId = '';
+        
+        if (isFastifyAdaptor) { // For Fastify
+            const subdomains = this.getSubdomainsForFastify(req);
+
+            if (subdomains instanceof Array && subdomains.length > 0) {
+                tenantId = subdomains[subdomains.length - 1];
             }
+        } else { // For Express - Default
+            // Check for multi-level subdomains and return only the first name
+            if (req.subdomains instanceof Array && req.subdomains.length > 0) {
+                tenantId = req.subdomains[req.subdomains.length - 1];
+            }
+        }
+
+        // Validate if tenant identifier token is present
+        if (this.isEmpty(tenantId)) {
+            throw new BadRequestException(`Tenant ID is mandatory`);
         }
 
         return tenantId;
     }
-    
+
     /**
      * Get the connection for the tenant
      *
@@ -295,10 +355,12 @@ export class TenancyCoreModule implements OnApplicationShutdown {
             useFactory: (
                 req: Request,
                 moduleOptions: TenancyModuleOptions,
-            ) => this.getTenant(req, moduleOptions),
+                adapterHost: HttpAdapterHost,
+            ) => this.getTenant(req, moduleOptions, adapterHost),
             inject: [
                 REQUEST,
                 TENANT_MODULE_OPTIONS,
+                DEFAULT_HTTP_ADAPTER_HOST,
             ]
         }
     }
@@ -363,6 +425,24 @@ export class TenancyCoreModule implements OnApplicationShutdown {
     }
 
     /**
+     * Create Http Adapter provider
+     *
+     * @private
+     * @static
+     * @returns {Provider}
+     * @memberof TenancyCoreModule
+     */
+    private static createHttpAdapterProvider(): Provider {
+        return {
+            provide: DEFAULT_HTTP_ADAPTER_HOST,
+            useFactory: (adapterHost: HttpAdapterHost) => adapterHost,
+            inject: [
+                HttpAdapterHost
+            ],
+        };
+    }
+
+    /**
      * Check if the object is empty or not
      *
      * @private
@@ -372,5 +452,36 @@ export class TenancyCoreModule implements OnApplicationShutdown {
      */
     private static isEmpty(obj: any) {
         return !obj || !Object.keys(obj).some(x => obj[x] !== void 0);
+    }
+
+    /**
+     * Check if the adapter is a fastify instance or not
+     *
+     * @private
+     * @static
+     * @param {HttpAdapterHost} adapterHost
+     * @returns {boolean}
+     * @memberof TenancyCoreModule
+     */
+    private static adapterIsFastify(adapterHost: HttpAdapterHost): boolean {
+        return adapterHost.httpAdapter.getType() === 'fastify';
+    }
+
+    /**
+     * Get the subdomains for fastify adaptor
+     *
+     * @private
+     * @static
+     * @param {Request} req
+     * @returns {string[]}
+     * @memberof TenancyCoreModule
+     */
+    private static getSubdomainsForFastify(req: Request): string[] {
+        let host = req?.headers?.host || '';
+
+        host = host.split(':')[0];
+        host = host.trim();
+
+        return host.split('.').reverse();
     }
 }

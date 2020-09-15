@@ -26,7 +26,7 @@ import { CatsModule } from "./cat.module.ts";
   imports: [
     TenancyModule.forRoot({
         tenantIdentifier: 'X-TENANT-ID',
-        options: {},
+        options: () => {},
         uri: (tenantId: string) => `mongodb://localhost/test-tenant-${tenantId}`,
     }),
     CatsModule,
