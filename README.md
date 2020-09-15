@@ -1,4 +1,4 @@
-# nestjs-tenancy
+<h1 align="center">nestjs-tenancy</h1>
 
 <p align="center">
   A simple easy to use multitenancy module for NestJs and Mongoose
