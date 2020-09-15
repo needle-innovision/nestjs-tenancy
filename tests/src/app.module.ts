@@ -9,7 +9,7 @@ import { DogsModule } from './dogs/dogs.module';
         MongooseModule.forRoot('mongodb://localhost:27017/test'),
         TenancyModule.forRoot({
             tenantIdentifier: 'X-TENANT-ID',
-            options: {},
+            options: () => { },
             uri: (tenantId: string) => `mongodb://localhost/test-tenant-${tenantId}`,
         }),
         CatsModule,
