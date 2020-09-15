@@ -6,8 +6,8 @@
 
 <p align="center">
 <a href="https://www.npmjs.com/~sandeepsuvit" target="_blank"><img src="https://img.shields.io/npm/v/@needle-innovision/nestjs-tenancy.svg" alt="NPM Version" /></a>
-<a href="https://www.npmjs.com/~sandeepsuvit" target="_blank"><img src="https://img.shields.io/npm/v/@needle-innovision/nestjs-tenancy.svg" alt="Package License" /></a>
-<a href="https://www.npmjs.com/~sandeepsuvit" target="_blank"><img src="https://img.shields.io/npm/v/@needle-innovision/nestjs-tenancy.svg" alt="NPM Downloads" /></a>
+<a href="https://www.npmjs.com/~sandeepsuvit" target="_blank"><img src="https://img.shields.io/npm/l/@needle-innovision/nestjs-tenancy.svg" alt="Package License" /></a>
+<a href="https://www.npmjs.com/~sandeepsuvit" target="_blank"><img src="https://img.shields.io/npm/dm/@needle-innovision/nestjs-tenancy.svg" alt="NPM Downloads" /></a>
 </p>
 
 ## Description
