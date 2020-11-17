@@ -36,6 +36,14 @@ export interface TenancyModuleOptions extends Record<string, any> {
      * Whitelist following subdomains
      */
     whitelist?: any;
+
+    /**
+     * Option to create the collections that are mapped to the tenant module
+     * automatically while requesting for the tenant connection for the 
+     * first time. This option is useful in case on mongo transactions, where
+     * transactions doens't create a collection if it does't exist already.
+     */
+    forceCreateCollections?: boolean;
 }
 
 /**

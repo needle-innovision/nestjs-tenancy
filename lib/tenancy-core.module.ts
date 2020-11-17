@@ -289,7 +289,17 @@ export class TenancyCoreModule implements OnApplicationShutdown {
 
         // Return the connection if exist
         if (exists) {
-            return connMap.get(tenantId);
+            const connection = connMap.get(tenantId) as Connection;
+
+            if (moduleOptions.forceCreateCollections) {
+                // For transactional support the Models/Collections has exist in the 
+                // tenant database, otherwise it will throw error
+                await Promise.all(
+                    Object.entries(connection.models).map(([k, m]) => m.createCollection())
+                );
+            }
+
+            return connection;
         }
         
         // Otherwise create a new connection
@@ -300,9 +310,15 @@ export class TenancyCoreModule implements OnApplicationShutdown {
         });
 
         // Attach connection to the models passed in the map
-        modelDefMap.forEach((definition: any) => {
+        modelDefMap.forEach(async (definition: any) => {
             const { name, schema, collection } = definition;
-            connection.model(name, schema, collection);
+            const modelCreated = connection.model(name, schema, collection);
+
+            if (moduleOptions.forceCreateCollections) {
+                // For transactional support the Models/Collections has exist in the 
+                // tenant database, otherwise it will throw error
+                await modelCreated.createCollection();
+            }
         });
 
         // Add the new connection to the map

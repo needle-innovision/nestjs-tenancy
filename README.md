@@ -312,6 +312,13 @@ import { CatsModule } from "./cat.module.ts";
 export class AppModule {}
 ```
 
+## Support for Mongo Transactions
+
+There are cases when using Mongo Transactions we wouldn't get the flexibility of
+mongoose to automatically initialize the empty collection for us. In that case
+we can make use of the property in `TenancyModuleOptions` which is `forceCreateCollections: true`
+(set to false by default) to automatically initialize all collections that are mapped to `TenancyModule`.
+
 ## Requirements
 
 1.  @nest/mongoose +6.4.0
