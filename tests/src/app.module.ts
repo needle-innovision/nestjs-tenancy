@@ -8,6 +8,7 @@ import { DogsModule } from './dogs/dogs.module';
     imports: [
         MongooseModule.forRoot('mongodb://localhost:27017/test'),
         TenancyModule.forRoot({
+            isTenantFromSubdomain: true,
             tenantIdentifier: 'X-TENANT-ID',
             options: () => { },
             uri: (tenantId: string) => `mongodb://localhost/test-tenant-${tenantId}`,
