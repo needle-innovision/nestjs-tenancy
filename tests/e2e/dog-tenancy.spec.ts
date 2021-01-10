@@ -22,6 +22,7 @@ describe('DogTenancy', () => {
         const createDto = { name: 'Charlie', breed: 'Beagle', age: 6 };
         request(server)
             .post('/dogs')
+            .set('Host', 'dogs.localhost:3000')
             .set('X-TENANT-ID', 'dogs')
             .send(createDto)
             .expect(201)
