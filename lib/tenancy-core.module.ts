@@ -185,7 +185,7 @@ export class TenancyCoreModule implements OnApplicationShutdown {
         // Pull the tenant id from the subdomain
         if (isTenantFromSubdomain) {
 
-            return this.getTenantFromSubdomain(isFastifyAdaptor, req);
+            return this.getTenantFromSubdomain(req);
 
         } else {
             // Validate if tenant identifier token is present
@@ -237,20 +237,12 @@ export class TenancyCoreModule implements OnApplicationShutdown {
      * @returns
      * @memberof TenancyCoreModule
      */
-    private static getTenantFromSubdomain(isFastifyAdaptor: boolean, req: Request) {
-        let tenantId = '';
-        
-        if (isFastifyAdaptor) { // For Fastify
-            const subdomains = this.getSubdomainsForFastify(req);
+    private static getTenantFromSubdomain(req: Request) {
+        const subdomains = this.getSubdomainsForFastify(req);
 
-            if (subdomains instanceof Array && subdomains.length > 0) {
-                tenantId = subdomains[subdomains.length - 1];
-            }
-        } else { // For Express - Default
-            // Check for multi-level subdomains and return only the first name
-            if (req.subdomains instanceof Array && req.subdomains.length > 0) {
-                tenantId = req.subdomains[req.subdomains.length - 1];
-            }
+        let tenantId = '';
+        if (subdomains instanceof Array && subdomains.length > 0) {
+            tenantId = subdomains[subdomains.length - 1];
         }
 
         // Validate if tenant identifier token is present
