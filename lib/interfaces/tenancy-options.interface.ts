@@ -11,22 +11,22 @@ export interface TenancyModuleOptions extends Record<string, any> {
      * If `true`, tenant id will be extracted from the subdomain
      */
     isTenantFromSubdomain?: boolean;
-    
+
     /**
      * Tenant id will be extracted using the keyword from the request header
      */
     tenantIdentifier?: string;
-    
+
     /**
      * URI for the tenant database
      */
-    uri: (uri: string) => string;
+    uri: (uri: string) => Promise<string> | string;
 
     /**
      * Used for applying custom validations
      */
     validator?: (tenantId: string) => TenancyValidator;
-    
+
     /**
      * Options for the database
      */
@@ -39,7 +39,7 @@ export interface TenancyModuleOptions extends Record<string, any> {
 
     /**
      * Option to create the collections that are mapped to the tenant module
-     * automatically while requesting for the tenant connection for the 
+     * automatically while requesting for the tenant connection for the
      * first time. This option is useful in case on mongo transactions, where
      * transactions doens't create a collection if it does't exist already.
      */
@@ -48,8 +48,8 @@ export interface TenancyModuleOptions extends Record<string, any> {
 
 /**
  * For creating options dynamically
- * 
- * To use this the class implementing `TenancyOptionsFactory` should 
+ *
+ * To use this the class implementing `TenancyOptionsFactory` should
  * implement the method `createTenancyOptions` under it.
  *
  * @export
@@ -75,7 +75,7 @@ export interface TenancyModuleAsyncOptions extends Pick<ModuleMetadata, 'imports
 /**
  * Tenancy validator interface
  * Note: The implementation controls the validation of the tenant
- * `validate` method will be called by the platform if valdation is set in the 
+ * `validate` method will be called by the platform if valdation is set in the
  * parent application.
  *
  * @export
