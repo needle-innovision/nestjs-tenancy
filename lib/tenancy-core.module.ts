@@ -228,7 +228,7 @@ export class TenancyCoreModule implements OnApplicationShutdown {
     }
 
     /**
-     * Get the Tenant information from the reqest header
+     * Get the Tenant information from the request header
      *
      * @private
      * @static
