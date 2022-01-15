@@ -34,7 +34,7 @@ export class TenancyCoreModule implements OnApplicationShutdown {
         const connectionMapProvider = this.createConnectionMapProvider();
 
         /* Model Definition Map */
-        const modelDefinitionMapProvider = this.createModelDefinitionMapProvider();       
+        const modelDefinitionMapProvider = this.createModelDefinitionMapProvider();
 
         /* Tenant Context */
         const tenantContextProvider = this.createTenantContextProvider();
@@ -98,7 +98,7 @@ export class TenancyCoreModule implements OnApplicationShutdown {
 
         /* Http Adaptor */
         const httpAdapterHost = this.createHttpAdapterProvider();
-        
+
         /* Tenant Connection */
         const tenantConnectionProvider = {
             provide: TENANT_CONNECTION,
@@ -196,7 +196,7 @@ export class TenancyCoreModule implements OnApplicationShutdown {
             return this.getTenantFromRequest(isFastifyAdaptor, req, tenantIdentifier);
         }
     }
-    
+
     /**
      * Get the Tenant information from the request object
      *
@@ -223,7 +223,7 @@ export class TenancyCoreModule implements OnApplicationShutdown {
         if (this.isEmpty(tenantId)) {
             throw new BadRequestException(`${tenantIdentifier} is not supplied`);
         }
-        
+
         return tenantId;
     }
 
@@ -239,7 +239,7 @@ export class TenancyCoreModule implements OnApplicationShutdown {
      */
     private static getTenantFromSubdomain(isFastifyAdaptor: boolean, req: Request) {
         let tenantId = '';
-        
+
         if (isFastifyAdaptor) { // For Fastify
             const subdomains = this.getSubdomainsForFastify(req);
 
@@ -283,7 +283,7 @@ export class TenancyCoreModule implements OnApplicationShutdown {
         if (moduleOptions.validator) {
             await moduleOptions.validator(tenantId).validate();
         }
-        
+
         // Check if tenantId exist in the connection map
         const exists = connMap.has(tenantId);
 
@@ -292,7 +292,7 @@ export class TenancyCoreModule implements OnApplicationShutdown {
             const connection = connMap.get(tenantId) as Connection;
 
             if (moduleOptions.forceCreateCollections) {
-                // For transactional support the Models/Collections has exist in the 
+                // For transactional support the Models/Collections has exist in the
                 // tenant database, otherwise it will throw error
                 await Promise.all(
                     Object.entries(connection.models).map(([k, m]) => m.createCollection())
@@ -301,9 +301,10 @@ export class TenancyCoreModule implements OnApplicationShutdown {
 
             return connection;
         }
-        
+
         // Otherwise create a new connection
-        const connection = createConnection(moduleOptions.uri(tenantId), {
+        const uri = await Promise.resolve(moduleOptions.uri(tenantId))
+        const connection = createConnection(uri, {
             useNewUrlParser: true,
             useUnifiedTopology: true,
             ...moduleOptions.options(),
@@ -315,7 +316,7 @@ export class TenancyCoreModule implements OnApplicationShutdown {
             const modelCreated = connection.model(name, schema, collection);
 
             if (moduleOptions.forceCreateCollections) {
-                // For transactional support the Models/Collections has exist in the 
+                // For transactional support the Models/Collections has exist in the
                 // tenant database, otherwise it will throw error
                 await modelCreated.createCollection();
             }
@@ -381,7 +382,7 @@ export class TenancyCoreModule implements OnApplicationShutdown {
             ]
         }
     }
-    
+
     /**
      * Create options providers
      *
@@ -421,7 +422,7 @@ export class TenancyCoreModule implements OnApplicationShutdown {
     private static createAsyncOptionsProvider(
         options: TenancyModuleAsyncOptions,
     ): Provider {
-        if(options.useFactory) {
+        if (options.useFactory) {
             return {
                 provide: TENANT_MODULE_OPTIONS,
                 useFactory: options.useFactory,
@@ -435,7 +436,7 @@ export class TenancyCoreModule implements OnApplicationShutdown {
 
         return {
             provide: TENANT_MODULE_OPTIONS,
-            useFactory: async (optionsFactory: TenancyOptionsFactory) => 
+            useFactory: async (optionsFactory: TenancyOptionsFactory) =>
                 await optionsFactory.createTenancyOptions(),
             inject,
         };
