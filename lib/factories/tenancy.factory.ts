@@ -5,7 +5,7 @@ import { CONNECTION_MAP, MODEL_DEFINITION_MAP, TENANT_CONNECTION } from '../tena
 import { ConnectionMap, ModelDefinitionMap } from '../types';
 import { getTenantModelDefinitionToken, getTenantModelToken } from '../utils';
 
-export const createTeanancyProviders = (definitions: ModelDefinition[]): Provider[] => {
+export const createTenancyProviders = (definitions: ModelDefinition[]): Provider[] => {
     const providers: Provider[] = [];
 
     for (const definition of definitions) {

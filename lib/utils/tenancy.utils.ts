@@ -29,7 +29,7 @@ export function getTenantModelDefinitionToken(model: string) {
  * @param {string} [name]
  * @returns
  */
-export function getTeanantConnectionToken(name?: string) {
+export function getTenantConnectionToken(name?: string) {
     return name && name !== DEFAULT_TENANT_DB_CONNECTION
         ? `${name}TenantConnection`
         : DEFAULT_TENANT_DB_CONNECTION;
