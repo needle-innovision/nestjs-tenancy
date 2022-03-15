@@ -1,5 +1,5 @@
 import { Inject } from '@nestjs/common';
-import { getTeanantConnectionToken, getTenantModelToken } from '../utils';
+import { getTenantConnectionToken, getTenantModelToken } from '../utils';
 
 /**
  * Get the instance of the tenant model object
@@ -13,4 +13,4 @@ export const InjectTenancyModel = (model: string) => Inject(getTenantModelToken(
  *
  * @param name any
  */
-export const InjectTenancyConnection = (name?: string) => Inject(getTeanantConnectionToken(name));
+export const InjectTenancyConnection = (name?: string) => Inject(getTenantConnectionToken(name));
