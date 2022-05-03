@@ -37,7 +37,7 @@ export const createTenancyProviders = (definitions: ModelDefinition[]): Provider
         providers.push({
             provide: getTenantModelToken(name),
             useFactory(tenantConnection: Connection) {
-                return tenantConnection.model(name, schema, collection);
+                return tenantConnection.models[name] || tenantConnection.model(name, schema, collection);
             },
             inject: [TENANT_CONNECTION],
         });
