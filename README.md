@@ -20,6 +20,8 @@
 $ npm i --save @needle-innovision/nestjs-tenancy
 ```
 
+***Note*** For nestjs version above 6 and below 7 we recommend using `$ npm i --save @needle-innovision/nestjs-tenancy@1.0.21`
+
 ## Basic usage
 
 **app.module.ts**
