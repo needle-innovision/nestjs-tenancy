@@ -17,10 +17,8 @@
 ## Installation
 
 ```bash
-$ npm i --save @needle-innovision/nestjs-tenancy
+npm i --save @needle-innovision/nestjs-tenancy
 ```
-
-***Note*** For nestjs version above 6 and below 7 we recommend using `$ npm i --save @needle-innovision/nestjs-tenancy@1.0.21`
 
 ## Basic usage
 
@@ -145,11 +143,12 @@ export class CatsController {
 
 ## Adding custom validators for the tenant
 
-Let's say you want to handle a validation check to see if your tenant is registered. You can do 
+Let's say you want to handle a validation check to see if your tenant is registered. You can do
 this by implementing the `TenancyValidator` interface and writing your own validation logic inside
 the `validate` method. The library invokes this method internally.
 
 ### Note
+
 Here we assume that `X-TENANT-ID` is passed in the request header so that its available for the validator.
 
 **custom-tenant.validator.ts**
@@ -323,10 +322,10 @@ we can make use of the property in `TenancyModuleOptions` which is `forceCreateC
 
 ## Requirements
 
-1.  @nest/mongoose +6.4.0
-2.  @nestjs/common +6.10.1
-3.  @nestjs/core +6.10.1
-4.  mongoose (with typings `@types/mongoose`) +5.7.12
+1. @nest/mongoose +6.4.0
+2. @nestjs/common +6.10.1
+3. @nestjs/core +6.10.1
+4. mongoose (with typings `@types/mongoose`) +5.7.12
 
 ## Test
 

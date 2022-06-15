@@ -2,8 +2,7 @@ import { BadRequestException, DynamicModule, Global, Module, OnApplicationShutdo
 import { Type } from '@nestjs/common/interfaces';
 import { HttpAdapterHost, ModuleRef, REQUEST } from '@nestjs/core';
 import { Request } from 'express';
-import { Connection, createConnection, Model } from 'mongoose';
-import { ConnectionOptions } from 'tls';
+import { Connection, createConnection } from 'mongoose';
 import { TenancyModuleAsyncOptions, TenancyModuleOptions, TenancyOptionsFactory } from './interfaces';
 import { CONNECTION_MAP, DEFAULT_HTTP_ADAPTER_HOST, MODEL_DEFINITION_MAP, TENANT_CONNECTION, TENANT_CONTEXT, TENANT_MODULE_OPTIONS } from './tenancy.constants';
 import { ConnectionMap, ModelDefinitionMap } from './types';
@@ -305,21 +304,16 @@ export class TenancyCoreModule implements OnApplicationShutdown {
 
         // Otherwise create a new connection
         const uri = await Promise.resolve(moduleOptions.uri(tenantId))
-        // Connection options
-        var connectionOptions: ConnectionOptions = {
+        const connection = createConnection(uri, {
             useNewUrlParser: true,
             useUnifiedTopology: true,
             ...moduleOptions.options(),
-        };
-
-        // Create the connection
-        const connection = createConnection(uri, connectionOptions);
+        });
 
         // Attach connection to the models passed in the map
         modelDefMap.forEach(async (definition: any) => {
             const { name, schema, collection } = definition;
-
-            const modelCreated: Model<unknown> = connection.model(name, schema, collection);
+            const modelCreated = connection.model(name, schema, collection);
 
             if (moduleOptions.forceCreateCollections) {
                 // For transactional support the Models/Collections has exist in the
