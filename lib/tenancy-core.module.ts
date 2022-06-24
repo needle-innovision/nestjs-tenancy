@@ -270,7 +270,7 @@ export class TenancyCoreModule implements OnApplicationShutdown {
         }
 
         // Check if validator is set, if so call the `validate` method on it
-        if (moduleOptions.validator) {
+        if (moduleOptions.validator && (tenantId || moduleOptions.forceCheck)) {
             await moduleOptions.validator(tenantId).validate();
         }
 
