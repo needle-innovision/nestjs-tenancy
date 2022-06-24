@@ -1,19 +1,24 @@
+import { ConnectionOptions } from 'tls';
 import { BadRequestException, DynamicModule, Global, Module, OnApplicationShutdown, Provider, Scope } from '@nestjs/common';
 import { Type } from '@nestjs/common/interfaces';
 import { HttpAdapterHost, ModuleRef, REQUEST } from '@nestjs/core';
-import { Request } from 'express';
 import { Connection, createConnection, Model } from 'mongoose';
-import { ConnectionOptions } from 'tls';
 import { TenancyModuleAsyncOptions, TenancyModuleOptions, TenancyOptionsFactory } from './interfaces';
-import { CONNECTION_MAP, DEFAULT_HTTP_ADAPTER_HOST, MODEL_DEFINITION_MAP, TENANT_CONNECTION, TENANT_CONTEXT, TENANT_MODULE_OPTIONS } from './tenancy.constants';
+import {
+    CONNECTION_MAP,
+    DEFAULT_HTTP_ADAPTER_HOST,
+    MODEL_DEFINITION_MAP,
+    TENANT_CONNECTION,
+    TENANT_CONTEXT,
+    TENANT_MODULE_OPTIONS,
+} from './tenancy.constants';
 import { ConnectionMap, ModelDefinitionMap } from './types';
+import { TenancyRequest } from './types/tenancy-request';
 
 @Global()
 @Module({})
 export class TenancyCoreModule implements OnApplicationShutdown {
-    constructor(
-        private readonly moduleRef: ModuleRef,
-    ) { }
+    constructor(private readonly moduleRef: ModuleRef) {}
 
     /**
      * Register for synchornous modules
@@ -23,8 +28,7 @@ export class TenancyCoreModule implements OnApplicationShutdown {
      * @returns {DynamicModule}
      * @memberof TenancyCoreModule
      */
-    static register(options: TenancyModuleOptions): DynamicModule {
-
+    public static register(options: TenancyModuleOptions): DynamicModule {
         /* Module options */
         const tenancyModuleOptionsProvider = {
             provide: TENANT_MODULE_OPTIONS,
@@ -51,15 +55,10 @@ export class TenancyCoreModule implements OnApplicationShutdown {
                 moduleOptions: TenancyModuleOptions,
                 connMap: ConnectionMap,
                 modelDefMap: ModelDefinitionMap,
-            ): Promise<Connection> => {
-                return await this.getConnection(tenantId, moduleOptions, connMap, modelDefMap);
+            ): Promise<Connection | undefined> => {
+                return this.getConnection(tenantId, moduleOptions, connMap, modelDefMap);
             },
-            inject: [
-                TENANT_CONTEXT,
-                TENANT_MODULE_OPTIONS,
-                CONNECTION_MAP,
-                MODEL_DEFINITION_MAP,
-            ],
+            inject: [TENANT_CONTEXT, TENANT_MODULE_OPTIONS, CONNECTION_MAP, MODEL_DEFINITION_MAP],
         };
 
         const providers = [
@@ -86,8 +85,7 @@ export class TenancyCoreModule implements OnApplicationShutdown {
      * @returns {DynamicModule}
      * @memberof TenancyCoreModule
      */
-    static registerAsync(options: TenancyModuleAsyncOptions): DynamicModule {
-
+    public static registerAsync(options: TenancyModuleAsyncOptions): DynamicModule {
         /* Connection Map */
         const connectionMapProvider = this.createConnectionMapProvider();
 
@@ -108,15 +106,10 @@ export class TenancyCoreModule implements OnApplicationShutdown {
                 moduleOptions: TenancyModuleOptions,
                 connMap: ConnectionMap,
                 modelDefMap: ModelDefinitionMap,
-            ): Promise<Connection> => {
-                return await this.getConnection(tenantId, moduleOptions, connMap, modelDefMap);
+            ): Promise<Connection | undefined> => {
+                return this.getConnection(tenantId, moduleOptions, connMap, modelDefMap);
             },
-            inject: [
-                TENANT_CONTEXT,
-                TENANT_MODULE_OPTIONS,
-                CONNECTION_MAP,
-                MODEL_DEFINITION_MAP,
-            ]
+            inject: [TENANT_CONTEXT, TENANT_MODULE_OPTIONS, CONNECTION_MAP, MODEL_DEFINITION_MAP],
         };
 
         /* Asyc providers */
@@ -135,7 +128,7 @@ export class TenancyCoreModule implements OnApplicationShutdown {
             module: TenancyCoreModule,
             imports: options.imports,
             providers: providers,
-            exports: providers
+            exports: providers,
         };
     }
 
@@ -144,14 +137,12 @@ export class TenancyCoreModule implements OnApplicationShutdown {
      *
      * @memberof TenantCoreModule
      */
-    async onApplicationShutdown() {
+    public async onApplicationShutdown() {
         // Map of all connections
         const connectionMap: ConnectionMap = this.moduleRef.get(CONNECTION_MAP);
 
         // Remove all stray connections
-        await Promise.all(
-            [...connectionMap.values()].map(connection => connection.close()),
-        );
+        await Promise.all([...connectionMap.values()].map((connection) => connection.close()));
     }
 
     /**
@@ -165,37 +156,37 @@ export class TenancyCoreModule implements OnApplicationShutdown {
      * @returns {string}
      * @memberof TenancyCoreModule
      */
-    private static getTenant(
-        req: Request,
-        moduleOptions: TenancyModuleOptions,
-        adapterHost: HttpAdapterHost,
-    ): string {
+    private static getTenant(req: TenancyRequest, moduleOptions: TenancyModuleOptions, adapterHost: HttpAdapterHost): string {
         // Check if the adaptor is fastify
         const isFastifyAdaptor = this.adapterIsFastify(adapterHost);
 
         if (!moduleOptions) {
-            throw new BadRequestException(`Tenant options are mandatory`);
+            throw new BadRequestException('Tenant options are mandatory');
         }
 
         // Extract the tenant idetifier
-        const {
-            tenantIdentifier = null,
-            isTenantFromSubdomain = false,
-        } = moduleOptions;
+        const { tenantIdentifier = null, isTenantFromSubdomain = false } = moduleOptions;
+
+        let tenantId;
 
         // Pull the tenant id from the subdomain
         if (isTenantFromSubdomain) {
-
-            return this.getTenantFromSubdomain(isFastifyAdaptor, req);
-
+            tenantId = this.getTenantFromSubdomain(isFastifyAdaptor, req);
         } else {
             // Validate if tenant identifier token is present
             if (!tenantIdentifier) {
                 throw new BadRequestException(`${tenantIdentifier} is mandatory`);
             }
 
-            return this.getTenantFromRequest(isFastifyAdaptor, req, tenantIdentifier);
+            tenantId = this.getTenantFromRequest(isFastifyAdaptor, req, tenantIdentifier);
         }
+
+        if (this.isEmpty(tenantId) && moduleOptions.forceCheck) {
+            throw new BadRequestException('Tenant ID is mandatory');
+        }
+
+        req.tenantId = tenantId;
+        return tenantId;
     }
 
     /**
@@ -209,20 +200,17 @@ export class TenancyCoreModule implements OnApplicationShutdown {
      * @returns
      * @memberof TenancyCoreModule
      */
-    private static getTenantFromRequest(isFastifyAdaptor: boolean, req: Request, tenantIdentifier: string) {
-        let tenantId = '';
+    private static getTenantFromRequest(isFastifyAdaptor: boolean, req: TenancyRequest, tenantIdentifier: string) {
+        let tenantId;
 
-        if (isFastifyAdaptor) { // For Fastify
+        if (isFastifyAdaptor) {
+            // For Fastify
             // Get the tenant id from the header
-            tenantId = req.headers[`${tenantIdentifier || ''}`.toLowerCase()]?.toString() || '';
-        } else { // For Express - Default
+            tenantId = req.headers[`${tenantIdentifier || ''}`.toLowerCase()]?.toString();
+        } else {
+            // For Express - Default
             // Get the tenant id from the request
-            tenantId = req.get(`${tenantIdentifier}`) || '';
-        }
-
-        // Validate if tenant id is present
-        if (this.isEmpty(tenantId)) {
-            throw new BadRequestException(`${tenantIdentifier} is not supplied`);
+            tenantId = req.get(`${tenantIdentifier}`) || (req.query.tenant as string);
         }
 
         return tenantId;
@@ -238,25 +226,22 @@ export class TenancyCoreModule implements OnApplicationShutdown {
      * @returns
      * @memberof TenancyCoreModule
      */
-    private static getTenantFromSubdomain(isFastifyAdaptor: boolean, req: Request) {
-        let tenantId = '';
+    private static getTenantFromSubdomain(isFastifyAdaptor: boolean, req: TenancyRequest) {
+        let tenantId;
 
-        if (isFastifyAdaptor) { // For Fastify
+        if (isFastifyAdaptor) {
+            // For Fastify
             const subdomains = this.getSubdomainsForFastify(req);
 
             if (subdomains instanceof Array && subdomains.length > 0) {
                 tenantId = subdomains[subdomains.length - 1];
             }
-        } else { // For Express - Default
+        } else {
+            // For Express - Default
             // Check for multi-level subdomains and return only the first name
             if (req.subdomains instanceof Array && req.subdomains.length > 0) {
                 tenantId = req.subdomains[req.subdomains.length - 1];
             }
-        }
-
-        // Validate if tenant identifier token is present
-        if (this.isEmpty(tenantId)) {
-            throw new BadRequestException(`Tenant ID is mandatory`);
         }
 
         return tenantId;
@@ -279,7 +264,11 @@ export class TenancyCoreModule implements OnApplicationShutdown {
         moduleOptions: TenancyModuleOptions,
         connMap: ConnectionMap,
         modelDefMap: ModelDefinitionMap,
-    ): Promise<Connection> {
+    ): Promise<Connection | undefined> {
+        if (!tenantId) {
+            return;
+        }
+
         // Check if validator is set, if so call the `validate` method on it
         if (moduleOptions.validator) {
             await moduleOptions.validator(tenantId).validate();
@@ -295,18 +284,16 @@ export class TenancyCoreModule implements OnApplicationShutdown {
             if (moduleOptions.forceCreateCollections) {
                 // For transactional support the Models/Collections has exist in the
                 // tenant database, otherwise it will throw error
-                await Promise.all(
-                    Object.entries(connection.models).map(([k, m]) => m.createCollection())
-                );
+                await Promise.all(Object.entries(connection.models).map(async ([k, m]) => m.createCollection()));
             }
 
             return connection;
         }
 
         // Otherwise create a new connection
-        const uri = await Promise.resolve(moduleOptions.uri(tenantId))
+        const uri = await Promise.resolve(moduleOptions.uri(tenantId));
         // Connection options
-        var connectionOptions: ConnectionOptions = {
+        const connectionOptions: ConnectionOptions = {
             useNewUrlParser: true,
             useUnifiedTopology: true,
             ...moduleOptions.options(),
@@ -316,7 +303,7 @@ export class TenancyCoreModule implements OnApplicationShutdown {
         const connection = createConnection(uri, connectionOptions);
 
         // Attach connection to the models passed in the map
-        modelDefMap.forEach(async (definition: any) => {
+        modelDefMap.forEach((definition: any) => {
             const { name, schema, collection } = definition;
 
             const modelCreated: Model<unknown> = connection.model(name, schema, collection);
@@ -324,7 +311,7 @@ export class TenancyCoreModule implements OnApplicationShutdown {
             if (moduleOptions.forceCreateCollections) {
                 // For transactional support the Models/Collections has exist in the
                 // tenant database, otherwise it will throw error
-                await modelCreated.createCollection();
+                void modelCreated.createCollection();
             }
         });
 
@@ -346,7 +333,7 @@ export class TenancyCoreModule implements OnApplicationShutdown {
         return {
             provide: CONNECTION_MAP,
             useFactory: (): ConnectionMap => new Map(),
-        }
+        };
     }
 
     /**
@@ -361,7 +348,7 @@ export class TenancyCoreModule implements OnApplicationShutdown {
         return {
             provide: MODEL_DEFINITION_MAP,
             useFactory: (): ModelDefinitionMap => new Map(),
-        }
+        };
     }
 
     /**
@@ -376,17 +363,10 @@ export class TenancyCoreModule implements OnApplicationShutdown {
         return {
             provide: TENANT_CONTEXT,
             scope: Scope.REQUEST,
-            useFactory: (
-                req: Request,
-                moduleOptions: TenancyModuleOptions,
-                adapterHost: HttpAdapterHost,
-            ) => this.getTenant(req, moduleOptions, adapterHost),
-            inject: [
-                REQUEST,
-                TENANT_MODULE_OPTIONS,
-                DEFAULT_HTTP_ADAPTER_HOST,
-            ]
-        }
+            useFactory: (req: TenancyRequest, moduleOptions: TenancyModuleOptions, adapterHost: HttpAdapterHost) =>
+                this.getTenant(req, moduleOptions, adapterHost),
+            inject: [REQUEST, TENANT_MODULE_OPTIONS, DEFAULT_HTTP_ADAPTER_HOST],
+        };
     }
 
     /**
@@ -398,9 +378,7 @@ export class TenancyCoreModule implements OnApplicationShutdown {
      * @returns {Provider[]}
      * @memberof TenancyCoreModule
      */
-    private static createAsyncProviders(
-        options: TenancyModuleAsyncOptions,
-    ): Provider[] {
+    private static createAsyncProviders(options: TenancyModuleAsyncOptions): Provider[] {
         if (options.useExisting || options.useFactory) {
             return [this.createAsyncOptionsProvider(options)];
         }
@@ -425,9 +403,7 @@ export class TenancyCoreModule implements OnApplicationShutdown {
      * @returns {Provider}
      * @memberof TenancyCoreModule
      */
-    private static createAsyncOptionsProvider(
-        options: TenancyModuleAsyncOptions,
-    ): Provider {
+    private static createAsyncOptionsProvider(options: TenancyModuleAsyncOptions): Provider {
         if (options.useFactory) {
             return {
                 provide: TENANT_MODULE_OPTIONS,
@@ -436,14 +412,11 @@ export class TenancyCoreModule implements OnApplicationShutdown {
             };
         }
 
-        const inject = [
-            (options.useClass || options.useExisting) as Type<TenancyOptionsFactory>,
-        ];
+        const inject = [(options.useClass || options.useExisting) as Type<TenancyOptionsFactory>];
 
         return {
             provide: TENANT_MODULE_OPTIONS,
-            useFactory: async (optionsFactory: TenancyOptionsFactory) =>
-                await optionsFactory.createTenancyOptions(),
+            useFactory: async (optionsFactory: TenancyOptionsFactory) => optionsFactory.createTenancyOptions(),
             inject,
         };
     }
@@ -460,9 +433,7 @@ export class TenancyCoreModule implements OnApplicationShutdown {
         return {
             provide: DEFAULT_HTTP_ADAPTER_HOST,
             useFactory: (adapterHost: HttpAdapterHost) => adapterHost,
-            inject: [
-                HttpAdapterHost
-            ],
+            inject: [HttpAdapterHost],
         };
     }
 
@@ -475,7 +446,7 @@ export class TenancyCoreModule implements OnApplicationShutdown {
      * @memberof TenancyCoreModule
      */
     private static isEmpty(obj: any) {
-        return !obj || !Object.keys(obj).some(x => obj[x] !== void 0);
+        return !obj || !Object.keys(obj).some((x) => obj[x] !== void 0);
     }
 
     /**
@@ -500,7 +471,7 @@ export class TenancyCoreModule implements OnApplicationShutdown {
      * @returns {string[]}
      * @memberof TenancyCoreModule
      */
-    private static getSubdomainsForFastify(req: Request): string[] {
+    private static getSubdomainsForFastify(req: TenancyRequest): string[] {
         let host = req?.headers?.host || '';
 
         host = host.split(':')[0];
