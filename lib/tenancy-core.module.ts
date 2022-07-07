@@ -51,8 +51,9 @@ export class TenancyCoreModule implements OnApplicationShutdown {
                 moduleOptions: TenancyModuleOptions,
                 connMap: ConnectionMap,
                 modelDefMap: ModelDefinitionMap,
-            ): Promise<Connection> => {
-                return await this.getConnection(tenantId, moduleOptions, connMap, modelDefMap);
+                req: Request
+            ): Promise<Connection | undefined> => {
+                return await this.getConnection(tenantId, moduleOptions, connMap, modelDefMap, req);
             },
             inject: [
                 TENANT_CONTEXT,
@@ -108,8 +109,9 @@ export class TenancyCoreModule implements OnApplicationShutdown {
                 moduleOptions: TenancyModuleOptions,
                 connMap: ConnectionMap,
                 modelDefMap: ModelDefinitionMap,
-            ): Promise<Connection> => {
-                return await this.getConnection(tenantId, moduleOptions, connMap, modelDefMap);
+                req: Request
+            ): Promise<Connection | undefined> => {
+                return await this.getConnection(tenantId, moduleOptions, connMap, modelDefMap, req);
             },
             inject: [
                 TENANT_CONTEXT,
@@ -169,7 +171,7 @@ export class TenancyCoreModule implements OnApplicationShutdown {
         req: Request,
         moduleOptions: TenancyModuleOptions,
         adapterHost: HttpAdapterHost,
-    ): string {
+    ): string | undefined {
         // Check if the adaptor is fastify
         const isFastifyAdaptor = this.adapterIsFastify(adapterHost);
 
@@ -183,9 +185,14 @@ export class TenancyCoreModule implements OnApplicationShutdown {
             isTenantFromSubdomain = false,
         } = moduleOptions;
 
+        if (moduleOptions.skipTenantCheck != null) {
+            if (moduleOptions.skipTenantCheck(req) === true) {
+                return undefined;
+            }
+        }
+
         // Pull the tenant id from the subdomain
         if (isTenantFromSubdomain) {
-
             return this.getTenantFromSubdomain(isFastifyAdaptor, req);
 
         } else {
@@ -279,7 +286,14 @@ export class TenancyCoreModule implements OnApplicationShutdown {
         moduleOptions: TenancyModuleOptions,
         connMap: ConnectionMap,
         modelDefMap: ModelDefinitionMap,
-    ): Promise<Connection> {
+        req: Request
+    ): Promise<Connection | undefined> {
+        if(moduleOptions.skipTenantCheck){
+            if(moduleOptions.skipTenantCheck(req) === true){
+                return undefined;
+            }
+        }
+
         // Check if validator is set, if so call the `validate` method on it
         if (moduleOptions.validator) {
             await moduleOptions.validator(tenantId).validate();
