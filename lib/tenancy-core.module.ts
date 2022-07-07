@@ -51,9 +51,8 @@ export class TenancyCoreModule implements OnApplicationShutdown {
                 moduleOptions: TenancyModuleOptions,
                 connMap: ConnectionMap,
                 modelDefMap: ModelDefinitionMap,
-                req: Request
             ): Promise<Connection | undefined> => {
-                return await this.getConnection(tenantId, moduleOptions, connMap, modelDefMap, req);
+                return await this.getConnection(tenantId, moduleOptions, connMap, modelDefMap);
             },
             inject: [
                 TENANT_CONTEXT,
@@ -108,10 +107,9 @@ export class TenancyCoreModule implements OnApplicationShutdown {
                 tenantId: string,
                 moduleOptions: TenancyModuleOptions,
                 connMap: ConnectionMap,
-                modelDefMap: ModelDefinitionMap,
-                req: Request
+                modelDefMap: ModelDefinitionMap
             ): Promise<Connection | undefined> => {
-                return await this.getConnection(tenantId, moduleOptions, connMap, modelDefMap, req);
+                return await this.getConnection(tenantId, moduleOptions, connMap, modelDefMap);
             },
             inject: [
                 TENANT_CONTEXT,
@@ -285,13 +283,12 @@ export class TenancyCoreModule implements OnApplicationShutdown {
         tenantId: string,
         moduleOptions: TenancyModuleOptions,
         connMap: ConnectionMap,
-        modelDefMap: ModelDefinitionMap,
-        req: Request
+        modelDefMap: ModelDefinitionMap
     ): Promise<Connection | undefined> {
-        if(moduleOptions.skipTenantCheck){
-            if(moduleOptions.skipTenantCheck(req) === true){
-                return undefined;
-            }
+        // If the value tenantId is undefined and skipTenantCheck was specified
+        // by the user, assume the route should be skipped.
+        if (tenantId == undefined && moduleOptions.skipTenantCheck) {
+            return undefined;
         }
 
         // Check if validator is set, if so call the `validate` method on it
