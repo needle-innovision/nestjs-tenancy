@@ -37,6 +37,11 @@ export const createTenancyProviders = (definitions: ModelDefinition[]): Provider
         providers.push({
             provide: getTenantModelToken(name),
             useFactory(tenantConnection: Connection) {
+                // tenantConnection will be null if route is excluded from tenant Id check,
+                // thus, skipTenantCheck is true
+                if(tenantConnection == null){
+                    return {};
+                }
                 return tenantConnection.models[name] || tenantConnection.model(name, schema, collection);
             },
             inject: [TENANT_CONNECTION],

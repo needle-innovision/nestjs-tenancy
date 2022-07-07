@@ -5,16 +5,17 @@ import { TenancyFeatureModule } from './tenancy-feature.module';
 
 /**
  * Module to help with multi tenancy
- * 
+ *
  * For root configutaion:
  * ```ts
  * TenancyModule.forRoot({
  *    tenantIdentifier: 'X-TenantId',
  *    options: {},
  *    uri: (tenantId: string) => `mongodb://localhost/tenant-${tenantId}`,
+ *    skipTenantCheck: (req) => req.route.path.match(/^\/birds/) != null,
  * })
  * ```
- * 
+ *
  * For root async configuration:
  * ```ts
  * TenancyModule.forRootAsync({
@@ -22,7 +23,7 @@ import { TenancyFeatureModule } from './tenancy-feature.module';
  *    inject: [ConfigService],
  * })
  *```
- * 
+ *
  * For feature configurations:
  * ```ts
  * TenancyModule.forFeature([{ name: 'Account', schema: AccountSchema }])

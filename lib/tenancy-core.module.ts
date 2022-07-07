@@ -51,7 +51,7 @@ export class TenancyCoreModule implements OnApplicationShutdown {
                 moduleOptions: TenancyModuleOptions,
                 connMap: ConnectionMap,
                 modelDefMap: ModelDefinitionMap,
-            ): Promise<Connection> => {
+            ): Promise<Connection | undefined> => {
                 return await this.getConnection(tenantId, moduleOptions, connMap, modelDefMap);
             },
             inject: [
@@ -107,8 +107,8 @@ export class TenancyCoreModule implements OnApplicationShutdown {
                 tenantId: string,
                 moduleOptions: TenancyModuleOptions,
                 connMap: ConnectionMap,
-                modelDefMap: ModelDefinitionMap,
-            ): Promise<Connection> => {
+                modelDefMap: ModelDefinitionMap
+            ): Promise<Connection | undefined> => {
                 return await this.getConnection(tenantId, moduleOptions, connMap, modelDefMap);
             },
             inject: [
@@ -169,7 +169,7 @@ export class TenancyCoreModule implements OnApplicationShutdown {
         req: Request,
         moduleOptions: TenancyModuleOptions,
         adapterHost: HttpAdapterHost,
-    ): string {
+    ): string | undefined {
         // Check if the adaptor is fastify
         const isFastifyAdaptor = this.adapterIsFastify(adapterHost);
 
@@ -183,9 +183,14 @@ export class TenancyCoreModule implements OnApplicationShutdown {
             isTenantFromSubdomain = false,
         } = moduleOptions;
 
+        if (moduleOptions.skipTenantCheck != null) {
+            if (moduleOptions.skipTenantCheck(req) === true) {
+                return undefined;
+            }
+        }
+
         // Pull the tenant id from the subdomain
         if (isTenantFromSubdomain) {
-
             return this.getTenantFromSubdomain(isFastifyAdaptor, req);
 
         } else {
@@ -278,8 +283,14 @@ export class TenancyCoreModule implements OnApplicationShutdown {
         tenantId: string,
         moduleOptions: TenancyModuleOptions,
         connMap: ConnectionMap,
-        modelDefMap: ModelDefinitionMap,
-    ): Promise<Connection> {
+        modelDefMap: ModelDefinitionMap
+    ): Promise<Connection | undefined> {
+        // If the value tenantId is undefined and skipTenantCheck was specified
+        // by the user, assume the route should be skipped.
+        if (tenantId == undefined && moduleOptions.skipTenantCheck) {
+            return undefined;
+        }
+
         // Check if validator is set, if so call the `validate` method on it
         if (moduleOptions.validator) {
             await moduleOptions.validator(tenantId).validate();

@@ -1,4 +1,5 @@
 import { ModuleMetadata, Type } from '@nestjs/common/interfaces';
+import { Request } from 'express';
 
 /**
  * Options for synchronous setup
@@ -26,6 +27,11 @@ export interface TenancyModuleOptions extends Record<string, any> {
      * Used for applying custom validations
      */
     validator?: (tenantId: string) => TenancyValidator;
+
+    /**
+     * Use for bypassing tenant database connection on some routes.
+     */
+    skipTenantCheck?: (request: Request) => boolean;
 
     /**
      * Options for the database
@@ -56,7 +62,7 @@ export interface TenancyModuleOptions extends Record<string, any> {
  * @interface TenancyOptionsFactory
  */
 export interface TenancyOptionsFactory {
-    createTenancyOptions():Promise<TenancyModuleOptions> | TenancyModuleOptions;
+    createTenancyOptions(): Promise<TenancyModuleOptions> | TenancyModuleOptions;
 }
 
 /**
