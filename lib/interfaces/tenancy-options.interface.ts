@@ -28,6 +28,9 @@ export interface TenancyModuleOptions extends Record<string, any> {
      */
     validator?: (tenantId: string) => TenancyValidator;
 
+    /**
+     * Use for bypassing tenant database connection on some routes.
+     */
     skipTenantCheck?: (request: Request) => boolean;
 
     /**
@@ -59,7 +62,7 @@ export interface TenancyModuleOptions extends Record<string, any> {
  * @interface TenancyOptionsFactory
  */
 export interface TenancyOptionsFactory {
-    createTenancyOptions():Promise<TenancyModuleOptions> | TenancyModuleOptions;
+    createTenancyOptions(): Promise<TenancyModuleOptions> | TenancyModuleOptions;
 }
 
 /**

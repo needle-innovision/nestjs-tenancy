@@ -11,9 +11,7 @@ import { DogsModule } from './dogs/dogs.module';
         TenancyModule.forRoot({
             tenantIdentifier: 'X-TENANT-ID',
             options: () => { },
-            skipTenantCheck: (req) => {
-                return req.route.path.match(/^\/birds*/) != null;
-            },
+            skipTenantCheck: (req) => req.route.path.match(/^\/birds*/) != null,
             uri: (tenantId: string) => `mongodb://127.0.0.1:27017/test-tenant-${tenantId}`,
 
         }),
