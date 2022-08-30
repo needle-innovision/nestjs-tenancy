@@ -1,5 +1,5 @@
 import { Provider } from '@nestjs/common';
-import { Connection } from 'mongoose';
+import { Connection, Model } from 'mongoose';
 import { ModelDefinition } from '../interfaces';
 import { CONNECTION_MAP, MODEL_DEFINITION_MAP, TENANT_CONNECTION } from '../tenancy.constants';
 import { ConnectionMap, ModelDefinitionMap } from '../types';
@@ -10,7 +10,7 @@ export const createTenancyProviders = (definitions: ModelDefinition[]): Provider
 
     for (const definition of definitions) {
         // Extract the definition data
-        const { name, schema, collection } = definition;
+        const { name, schema, collection, discriminators } = definition;
 
         providers.push({
             provide: getTenantModelDefinitionToken(name),
@@ -19,6 +19,7 @@ export const createTenancyProviders = (definitions: ModelDefinition[]): Provider
                 connectionMap: ConnectionMap,
             ) => {
                 const exists = modelDefinitionMap.has(name);
+
                 if (!exists) {
                     modelDefinitionMap.set(name, { ...definition });
 
@@ -41,6 +42,17 @@ export const createTenancyProviders = (definitions: ModelDefinition[]): Provider
             },
             inject: [TENANT_CONNECTION],
         });
+
+        // Fix for Issue#31 - Collect descriminators
+        providers.push(
+            ...(discriminators || []).map((d) => ({
+                provide: getTenantModelToken(name),
+                useFactory: (model: Model<Document>) => {
+                    return model.discriminator(d.name, d.schema, d.value);
+                },
+                inject: [getTenantModelToken(name)],
+            }))
+        )
     }
 
     // Return the list of providers mapping
