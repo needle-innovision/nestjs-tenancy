@@ -24,7 +24,8 @@ npm i --save @needle-innovision/nestjs-tenancy
 
 | Nest versions | Command                                                 |
 |---------------|---------------------------------------------------------|
-| v8.x          | `npm i --save @needle-innovision/nestjs-tenancy`        |
+| v7.x          | `npm i --save @needle-innovision/nestjs-tenancy         |
+| v8.x          | `npm i --save @needle-innovision/nestjs-tenancy@2.0.0   |
 | v6.x or v7.x  | `npm i --save @needle-innovision/nestjs-tenancy@1.0.21` |
 
 ## Basic usage
@@ -329,10 +330,10 @@ we can make use of the property in `TenancyModuleOptions` which is `forceCreateC
 
 ## Requirements
 
-1. @nest/mongoose ^6.x.x || ^8.x.x
-2. @nestjs/common ^6.x.x || ^8.x.x
-3. @nestjs/core ^6.x.x || ^8.x.x
-4. mongoose ^5.7.12 (with typings `@types/mongoose`) || ^6.3.8
+1. @nest/mongoose ^6.x.x || ^8.x.x || ^9.x.x
+2. @nestjs/common ^6.x.x || ^8.x.x || ^9.x.x
+3. @nestjs/core ^6.x.x || ^8.x.x || ^9.x.x
+4. mongoose ^5.7.12 (with typings `@types/mongoose`) || ^6.3.8 || ^6.7.0  
 
 ## Test
 

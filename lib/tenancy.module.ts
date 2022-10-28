@@ -1,11 +1,15 @@
 import { DynamicModule, Module } from '@nestjs/common';
-import { ModelDefinition, TenancyModuleAsyncOptions, TenancyModuleOptions } from './interfaces';
+import {
+  ModelDefinition,
+  TenancyModuleAsyncOptions,
+  TenancyModuleOptions,
+} from './interfaces';
 import { TenancyCoreModule } from './tenancy-core.module';
 import { TenancyFeatureModule } from './tenancy-feature.module';
 
 /**
  * Module to help with multi tenancy
- * 
+ *
  * For root configutaion:
  * ```ts
  * TenancyModule.forRoot({
@@ -14,7 +18,7 @@ import { TenancyFeatureModule } from './tenancy-feature.module';
  *    uri: (tenantId: string) => `mongodb://localhost/tenant-${tenantId}`,
  * })
  * ```
- * 
+ *
  * For root async configuration:
  * ```ts
  * TenancyModule.forRootAsync({
@@ -22,7 +26,7 @@ import { TenancyFeatureModule } from './tenancy-feature.module';
  *    inject: [ConfigService],
  * })
  *```
- * 
+ *
  * For feature configurations:
  * ```ts
  * TenancyModule.forFeature([{ name: 'Account', schema: AccountSchema }])
@@ -32,7 +36,6 @@ import { TenancyFeatureModule } from './tenancy-feature.module';
  */
 @Module({})
 export class TenancyModule {
-
   /**
    * For root synchronous imports
    *
@@ -77,5 +80,4 @@ export class TenancyModule {
       imports: [TenancyFeatureModule.register(models)],
     };
   }
-
 }
