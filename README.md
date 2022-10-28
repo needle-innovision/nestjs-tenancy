@@ -24,8 +24,8 @@ npm i --save @needle-innovision/nestjs-tenancy
 
 | Nest versions | Command                                                 |
 |---------------|---------------------------------------------------------|
-| v9.x          | `npm i --save @needle-innovision/nestjs-tenancy         |
-| v8.x          | `npm i --save @needle-innovision/nestjs-tenancy@2.0.0   |
+| v9.x          | `npm i --save @needle-innovision/nestjs-tenancy`        |
+| v8.x          | `npm i --save @needle-innovision/nestjs-tenancy@2.0.0`  |
 | v6.x or v7.x  | `npm i --save @needle-innovision/nestjs-tenancy@1.0.21` |
 
 ## Basic usage
