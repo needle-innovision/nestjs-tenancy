@@ -267,7 +267,7 @@ import { CustomTenantValidator } from './tenant/validators/custom-tenant.validat
     // Load the default configuration file
     ConfigModule.forRoot({
       isGlobal: true,
-      load: configuration,
+      load: [configuration],
     }),
     // Mongoose default connection
     MongooseModule.forRootAsync({
