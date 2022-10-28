@@ -5,15 +5,13 @@ import { ModelDefinition } from './interfaces';
 @Global()
 @Module({})
 export class TenancyFeatureModule {
+  static register(models: ModelDefinition[]): DynamicModule {
+    const providers = createTenancyProviders(models);
 
-    static register(models: ModelDefinition[]): DynamicModule {
-        const providers = createTenancyProviders(models);
-
-        return {
-            module: TenancyFeatureModule,
-            providers,
-            exports: providers,
-        };
-    }
-
+    return {
+      module: TenancyFeatureModule,
+      providers,
+      exports: providers,
+    };
+  }
 }
