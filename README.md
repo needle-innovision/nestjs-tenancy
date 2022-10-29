@@ -162,7 +162,7 @@ Here we assume that `X-TENANT-ID` is passed in the request header so that its av
 **custom-tenant.validator.ts**
 
 ```typescript
-import { TenancyValidator } from '@app/tenancy';
+import { TenancyValidator } from "@needle-innovision/nestjs-tenancy";
 import { Injectable, NotFoundException } from "@nestjs/common";
 import { InjectModel } from '@nestjs/mongoose';
 import { Model } from 'mongoose';
