@@ -1,3 +1,3 @@
 export class CatCountDto {
-    readonly count: number;
+    count: number; 
 }

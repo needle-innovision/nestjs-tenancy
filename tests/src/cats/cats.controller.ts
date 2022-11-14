@@ -21,7 +21,7 @@ export class CatsController {
 
 
     @MessagePattern({cmd: 'count_cats'})
-    async getCats(): Promise<number> {
+    getCats(): number {
         // testing the messagepattern here not the data
         return 99;
     }

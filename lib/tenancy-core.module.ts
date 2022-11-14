@@ -1,15 +1,16 @@
 import {
   BadRequestException,
-  DynamicModule,
+  DynamicModule, 
   Global,
   Module,
   OnApplicationShutdown,
   Provider, 
   Scope,
+  ExecutionContext,
 } from '@nestjs/common';
-import { ArgumentsHost, ExecutionContext, Type } from '@nestjs/common/interfaces'; 
-import { HttpAdapterHost, ModuleRef, REQUEST } from '@nestjs/core';
-import { BaseRpcContext, CONTEXT } from '@nestjs/microservices';
+import {  Type } from '@nestjs/common/interfaces'; 
+import { HttpAdapterHost, ModuleRef, REQUEST } from '@nestjs/core'; 
+import { BaseRpcContext, CONTEXT, RequestContext, TcpContext } from '@nestjs/microservices';
 import { Request } from 'express';
 import { Connection, createConnection, Model } from 'mongoose';
 import { ConnectionOptions } from 'tls';
@@ -185,19 +186,32 @@ export class TenancyCoreModule implements OnApplicationShutdown {
    *
    * @private
    * @static
-   * @param {ExecutionContext} context
+   * @param {ExecutionContext & Request} context
    * @param {TenancyModuleOptions} moduleOptions
    * @param {HttpAdapterHost} adapterHost
    * @returns {string}
    * @memberof TenancyCoreModule
    */
   private static getTenant(
-    context: ExecutionContext,
+    requestContext: RequestContext & Request,
     moduleOptions: TenancyModuleOptions,
     adapterHost: HttpAdapterHost,
   ): string {
+    // when the call is a microservice call then the context is one of the possible contexts eg TcpContext, RmqContext etc..
+    // when the call is an http call then the requestContext is Request object... (something to do with injection from above)
    
-    console.log('getTenant context', context);
+    var data: any;
+    var contextType = 'http';
+    var context = typeof requestContext.pattern !== 'undefined' ? requestContext.getContext() : requestContext;
+    if(typeof requestContext.pattern !== 'undefined') {
+      //console.log('getTenant requestContext', requestContext); 
+
+      //console.log('context', context);
+      contextType = 'rpc'; //context.getType(); // get Type not working here.. dont know why
+      data = requestContext.data;
+    } 
+
+
 
     if (!moduleOptions) {
       throw new BadRequestException(`Tenant options are mandatory`);
@@ -212,10 +226,12 @@ export class TenancyCoreModule implements OnApplicationShutdown {
     }
 
 
-    if(context.getType() === 'http') {
+    if(contextType === 'http') {
       //  do something that is only important in the context of regular HTTP requests (REST)
-      var req = context.switchToHttp().getRequest();
-
+      var req = context;
+      if(typeof context.switchToHttp !== 'undefined') {
+         req = context.getRequest();
+      }
       // Check if the adaptor is fastify
       const isFastifyAdaptor = this.adapterIsFastify(adapterHost);
 
@@ -226,20 +242,17 @@ export class TenancyCoreModule implements OnApplicationShutdown {
         return this.getTenantFromRequest(isFastifyAdaptor, req, tenantIdentifier);
       }
 
-     } else if(context.getType() === 'rpc') {
+     } else if(contextType === 'rpc') {
         // do something that is only important in the context of Microservice requests
-
-        var data = context.switchToRpc().getData();
+ 
         // inside microservice call..
         // just return a property from the sent data object -- could be dynamic using tenantIdentifier
      
         return this.getTenantFromMicroserviceRequest(data, tenantIdentifier);
    
-    } else if(context.getType() === 'ws') {
+    } else if(contextType === 'ws') {
         // do something that is only important in the context of Websocket requests
-
-        var data = context.switchToWs().getData();
-
+ 
         return this.getTenantFromWebsocketRequest(data, tenantIdentifier);
     }
 
@@ -502,7 +515,7 @@ export class TenancyCoreModule implements OnApplicationShutdown {
       provide: TENANT_CONTEXT,
       scope: Scope.REQUEST,
       useFactory: (
-        context: ExecutionContext,
+        context: RequestContext & Request, 
         moduleOptions: TenancyModuleOptions,
         adapterHost: HttpAdapterHost,
       ) => this.getTenant(context, moduleOptions, adapterHost),

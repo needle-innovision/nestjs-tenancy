@@ -9,7 +9,7 @@ import { DogSchema, Dog } from './schemas/dog.schema';
     imports: [
         TenancyModule.forFeature([{ name: Dog.name, schema: DogSchema }]), 
         ClientsModule.register([
-            { name: 'DOG_SERVICE', transport: Transport.TCP },
+            { name: 'DOGS_EVENT_BUS', transport: Transport.TCP },
         ]),
     ],
     controllers: [DogsController],

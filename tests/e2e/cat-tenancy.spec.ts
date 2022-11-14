@@ -1,4 +1,5 @@
 import { INestApplication } from '@nestjs/common';
+import { Transport } from '@nestjs/microservices';
 import { Test } from '@nestjs/testing';
 import { Server } from 'http';
 import * as request from 'supertest';
@@ -15,6 +16,11 @@ describe('CatTenancy', () => {
 
         app = module.createNestApplication();
         server = app.getHttpServer();
+        app.connectMicroservice({
+            transport: Transport.TCP,
+        });
+      
+        await app.startAllMicroservices();
         await app.init();
     });
 
