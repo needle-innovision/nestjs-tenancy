@@ -197,12 +197,20 @@ export class TenancyCoreModule implements OnApplicationShutdown {
     moduleOptions: TenancyModuleOptions,
     adapterHost: HttpAdapterHost,
   ): string {
+
+    if (!moduleOptions) {
+      throw new BadRequestException(`Tenant options are mandatory`);
+    }
+    // Extract the tenant idetifier
+    const { tenantIdentifier = null, isTenantFromSubdomain = false } = moduleOptions;
+    
+
     // when the call is a microservice call then the context is one of the possible contexts eg TcpContext, RmqContext etc..
     // when the call is an http call then the requestContext is Request object... (something to do with injection from above)
    
     var data: any;
-    var contextType = 'http';
-    var context = typeof requestContext.pattern !== 'undefined' ? requestContext.getContext() : requestContext;
+    var contextType = 'http'; // default
+    var context = typeof requestContext.pattern !== 'undefined' ? requestContext.getContext() : requestContext; // bad check could be better
     if(typeof requestContext.pattern !== 'undefined') {
       //console.log('getTenant requestContext', requestContext); 
 
@@ -212,14 +220,7 @@ export class TenancyCoreModule implements OnApplicationShutdown {
     } 
 
 
-
-    if (!moduleOptions) {
-      throw new BadRequestException(`Tenant options are mandatory`);
-    }
-
-    // Extract the tenant idetifier
-    const { tenantIdentifier = null, isTenantFromSubdomain = false } = moduleOptions;
- 
+   
      // Validate if tenant identifier token is present
     if (!tenantIdentifier) {
       throw new BadRequestException(`Tenant identifier is mandatory`);
