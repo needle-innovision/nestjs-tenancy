@@ -10,7 +10,7 @@ import {
 } from '@nestjs/common';
 import {  Type } from '@nestjs/common/interfaces'; 
 import { HttpAdapterHost, ModuleRef, REQUEST } from '@nestjs/core'; 
-import { BaseRpcContext, CONTEXT, RequestContext, TcpContext } from '@nestjs/microservices';
+import { BaseRpcContext, CONTEXT, RequestContext, RpcException, TcpContext } from '@nestjs/microservices';
 import { Request } from 'express';
 import { Connection, createConnection, Model } from 'mongoose';
 import { ConnectionOptions } from 'tls';
@@ -283,7 +283,7 @@ export class TenancyCoreModule implements OnApplicationShutdown {
   
       // Validate if tenant id is present
       if (this.isEmpty(tenantId)) {
-        throw new BadRequestException(`${tenantIdentifier} is not supplied`);
+        throw new RpcException(`${tenantIdentifier} is not supplied`);
       }
   
       return tenantId;
@@ -310,7 +310,7 @@ export class TenancyCoreModule implements OnApplicationShutdown {
 
     // Validate if tenant id is present
     if (this.isEmpty(tenantId)) {
-      throw new BadRequestException(`${tenantIdentifier} is not supplied`);
+      throw new RpcException(`${tenantIdentifier} is not supplied`);
     }
 
     return tenantId;
