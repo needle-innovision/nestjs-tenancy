@@ -4,11 +4,12 @@ import {
   Global,
   Module,
   OnApplicationShutdown,
-  Provider,
+  Provider, 
   Scope,
 } from '@nestjs/common';
-import { Type } from '@nestjs/common/interfaces';
+import { ArgumentsHost, ExecutionContext, Type } from '@nestjs/common/interfaces'; 
 import { HttpAdapterHost, ModuleRef, REQUEST } from '@nestjs/core';
+import { BaseRpcContext, CONTEXT } from '@nestjs/microservices';
 import { Request } from 'express';
 import { Connection, createConnection, Model } from 'mongoose';
 import { ConnectionOptions } from 'tls';
@@ -184,41 +185,123 @@ export class TenancyCoreModule implements OnApplicationShutdown {
    *
    * @private
    * @static
-   * @param {Request} req
+   * @param {ExecutionContext} context
    * @param {TenancyModuleOptions} moduleOptions
    * @param {HttpAdapterHost} adapterHost
    * @returns {string}
    * @memberof TenancyCoreModule
    */
   private static getTenant(
-    req: Request,
+    context: ExecutionContext,
     moduleOptions: TenancyModuleOptions,
     adapterHost: HttpAdapterHost,
   ): string {
-    // Check if the adaptor is fastify
-    const isFastifyAdaptor = this.adapterIsFastify(adapterHost);
+   
+    console.log('getTenant context', context);
 
     if (!moduleOptions) {
       throw new BadRequestException(`Tenant options are mandatory`);
     }
 
     // Extract the tenant idetifier
-    const { tenantIdentifier = null, isTenantFromSubdomain = false } =
-      moduleOptions;
+    const { tenantIdentifier = null, isTenantFromSubdomain = false } = moduleOptions;
+ 
+     // Validate if tenant identifier token is present
+    if (!tenantIdentifier) {
+      throw new BadRequestException(`Tenant identifier is mandatory`);
+    }
 
-    // Pull the tenant id from the subdomain
-    if (isTenantFromSubdomain) {
-      return this.getTenantFromSubdomain(isFastifyAdaptor, req);
-    } else {
-      // Validate if tenant identifier token is present
-      if (!tenantIdentifier) {
-        throw new BadRequestException(`${tenantIdentifier} is mandatory`);
+
+    if(context.getType() === 'http') {
+      //  do something that is only important in the context of regular HTTP requests (REST)
+      var req = context.switchToHttp().getRequest();
+
+      // Check if the adaptor is fastify
+      const isFastifyAdaptor = this.adapterIsFastify(adapterHost);
+
+      // Pull the tenant id from the subdomain
+      if (isTenantFromSubdomain) {
+        return this.getTenantFromSubdomain(isFastifyAdaptor, req);
+      } else { 
+        return this.getTenantFromRequest(isFastifyAdaptor, req, tenantIdentifier);
       }
 
-      return this.getTenantFromRequest(isFastifyAdaptor, req, tenantIdentifier);
+     } else if(context.getType() === 'rpc') {
+        // do something that is only important in the context of Microservice requests
+
+        var data = context.switchToRpc().getData();
+        // inside microservice call..
+        // just return a property from the sent data object -- could be dynamic using tenantIdentifier
+     
+        return this.getTenantFromMicroserviceRequest(data, tenantIdentifier);
+   
+    } else if(context.getType() === 'ws') {
+        // do something that is only important in the context of Websocket requests
+
+        var data = context.switchToWs().getData();
+
+        return this.getTenantFromWebsocketRequest(data, tenantIdentifier);
     }
+
+    return '';
+
   }
 
+
+  
+  
+    /**
+   * Get the Tenant information from the request object
+   *
+   * @private
+   * @static 
+   * @param {RmqData} data
+   * @param {string} tenantIdentifier
+   * @returns
+   * @memberof TenancyCoreModule
+   */
+     private static getTenantFromWebsocketRequest( 
+      data: any,
+      tenantIdentifier: string,
+    ): string {
+      // could be extended later
+      
+      let tenantId = data[tenantIdentifier]; 
+  
+      // Validate if tenant id is present
+      if (this.isEmpty(tenantId)) {
+        throw new BadRequestException(`${tenantIdentifier} is not supplied`);
+      }
+  
+      return tenantId;
+    }
+
+  /**
+   * Get the Tenant information from the request object
+   *
+   * @private
+   * @static 
+   * @param {RmqData} data
+   * @param {string} tenantIdentifier
+   * @returns
+   * @memberof TenancyCoreModule
+   */
+   private static getTenantFromMicroserviceRequest( 
+    data: any,
+    tenantIdentifier: string,
+  ): string {
+
+    // could be extended later
+      
+    let tenantId = data[tenantIdentifier]; 
+
+    // Validate if tenant id is present
+    if (this.isEmpty(tenantId)) {
+      throw new BadRequestException(`${tenantIdentifier} is not supplied`);
+    }
+
+    return tenantId;
+  }
   /**
    * Get the Tenant information from the request object
    *
@@ -235,8 +318,9 @@ export class TenancyCoreModule implements OnApplicationShutdown {
     req: Request,
     tenantIdentifier: string,
   ) {
-    let tenantId = '';
 
+    let tenantId = '';
+   
     if (isFastifyAdaptor) {
       // For Fastify
       // Get the tenant id from the header
@@ -248,6 +332,7 @@ export class TenancyCoreModule implements OnApplicationShutdown {
       // Get the tenant id from the request
       tenantId = req.get(`${tenantIdentifier}`) || '';
     }
+    
 
     // Validate if tenant id is present
     if (this.isEmpty(tenantId)) {
@@ -417,11 +502,11 @@ export class TenancyCoreModule implements OnApplicationShutdown {
       provide: TENANT_CONTEXT,
       scope: Scope.REQUEST,
       useFactory: (
-        req: Request,
+        context: ExecutionContext,
         moduleOptions: TenancyModuleOptions,
         adapterHost: HttpAdapterHost,
-      ) => this.getTenant(req, moduleOptions, adapterHost),
-      inject: [REQUEST, TENANT_MODULE_OPTIONS, DEFAULT_HTTP_ADAPTER_HOST],
+      ) => this.getTenant(context, moduleOptions, adapterHost),
+      inject: [CONTEXT, TENANT_MODULE_OPTIONS, DEFAULT_HTTP_ADAPTER_HOST],
     };
   }
 

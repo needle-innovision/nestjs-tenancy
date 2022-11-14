@@ -1,5 +1,6 @@
 
 import { Body, Controller, Get, Post } from '@nestjs/common';
+import { MessagePattern } from '@nestjs/microservices';
 import { CatsService } from './cats.service';
 import { CreateCatDto } from './dto/create-cat.dto';
 import { Cat } from './schemas/cat.schema';
@@ -16,5 +17,12 @@ export class CatsController {
     @Get()
     async findAll(): Promise<Cat[]> {
         return this.catsService.findAll();
+    }
+
+
+    @MessagePattern({cmd: 'count_cats'})
+    async getCats(): Promise<number> {
+        // testing the messagepattern here not the data
+        return 99;
     }
 }

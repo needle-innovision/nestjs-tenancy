@@ -33,6 +33,20 @@ describe('DogTenancy', () => {
             });
     });
 
+
+    it(`should return 99 cats`, (done) => { 
+        request(server)
+            .get('/count_cats')
+            .set('X-TENANT-ID', 'dogs')
+            .send()
+            .expect(200)
+            .end((err, { body }) => {
+                expect(body.count).toEqual(99); 
+                done();
+            });
+    });
+
+
     afterEach(async () => {
         await app.close();
     });
