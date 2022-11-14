@@ -1,4 +1,5 @@
 import { INestApplication } from '@nestjs/common';
+import { Transport } from '@nestjs/microservices';
 import { Test } from '@nestjs/testing';
 import { Server } from 'http';
 import * as request from 'supertest';
@@ -15,6 +16,12 @@ describe('DogTenancy', () => {
 
         app = module.createNestApplication();
         server = app.getHttpServer();
+        app.connectMicroservice({
+            transport: Transport.TCP,
+        });
+      
+        await app.startAllMicroservices();
+
         await app.init();
     });
 
@@ -32,6 +39,20 @@ describe('DogTenancy', () => {
                 done();
             });
     });
+
+
+    it(`should return 99 cats from the cats tenant`, (done) => { 
+        request(server)
+            .get('/dogs/count_cats')
+            .set('X-TENANT-ID', 'dogs')
+            .send()
+            .expect(200)
+            .end((err, { body }) => { 
+                expect(body.count).toEqual(99); 
+                done();
+            });
+    });
+
 
     afterEach(async () => {
         await app.close();

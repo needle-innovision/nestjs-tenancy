@@ -1,14 +1,16 @@
 import {
   BadRequestException,
-  DynamicModule,
+  DynamicModule, 
   Global,
   Module,
   OnApplicationShutdown,
-  Provider,
+  Provider, 
   Scope,
+  ExecutionContext,
 } from '@nestjs/common';
-import { Type } from '@nestjs/common/interfaces';
-import { HttpAdapterHost, ModuleRef, REQUEST } from '@nestjs/core';
+import {  Type } from '@nestjs/common/interfaces'; 
+import { HttpAdapterHost, ModuleRef, REQUEST } from '@nestjs/core'; 
+import { BaseRpcContext, CONTEXT, RequestContext, RpcException, TcpContext } from '@nestjs/microservices';
 import { Request } from 'express';
 import { Connection, createConnection, Model } from 'mongoose';
 import { ConnectionOptions } from 'tls';
@@ -184,41 +186,136 @@ export class TenancyCoreModule implements OnApplicationShutdown {
    *
    * @private
    * @static
-   * @param {Request} req
+   * @param {ExecutionContext & Request} context
    * @param {TenancyModuleOptions} moduleOptions
    * @param {HttpAdapterHost} adapterHost
    * @returns {string}
    * @memberof TenancyCoreModule
    */
   private static getTenant(
-    req: Request,
+    requestContext: RequestContext & Request,
     moduleOptions: TenancyModuleOptions,
     adapterHost: HttpAdapterHost,
   ): string {
-    // Check if the adaptor is fastify
-    const isFastifyAdaptor = this.adapterIsFastify(adapterHost);
 
     if (!moduleOptions) {
       throw new BadRequestException(`Tenant options are mandatory`);
     }
-
     // Extract the tenant idetifier
-    const { tenantIdentifier = null, isTenantFromSubdomain = false } =
-      moduleOptions;
+    const { tenantIdentifier = null, isTenantFromSubdomain = false } = moduleOptions;
+    
 
-    // Pull the tenant id from the subdomain
-    if (isTenantFromSubdomain) {
-      return this.getTenantFromSubdomain(isFastifyAdaptor, req);
-    } else {
-      // Validate if tenant identifier token is present
-      if (!tenantIdentifier) {
-        throw new BadRequestException(`${tenantIdentifier} is mandatory`);
+    // when the call is a microservice call then the context is one of the possible contexts eg TcpContext, RmqContext etc..
+    // when the call is an http call then the requestContext is Request object... (something to do with injection from above)
+   
+    var data: any;
+    var contextType = 'http'; // default
+    var context = typeof requestContext.pattern !== 'undefined' ? requestContext.getContext() : requestContext; // bad check could be better
+    if(typeof requestContext.pattern !== 'undefined') {
+      //console.log('getTenant requestContext', requestContext); 
+
+      //console.log('context', context);
+      contextType = 'rpc'; //context.getType(); // get Type not working here.. dont know why
+      data = requestContext.data;
+    } 
+
+
+   
+     // Validate if tenant identifier token is present
+    if (!tenantIdentifier) {
+      throw new BadRequestException(`Tenant identifier is mandatory`);
+    }
+
+
+    if(contextType === 'http') {
+      //  do something that is only important in the context of regular HTTP requests (REST)
+      var req = context;
+      if(typeof context.switchToHttp !== 'undefined') {
+         req = context.getRequest();
+      }
+      // Check if the adaptor is fastify
+      const isFastifyAdaptor = this.adapterIsFastify(adapterHost);
+
+      // Pull the tenant id from the subdomain
+      if (isTenantFromSubdomain) {
+        return this.getTenantFromSubdomain(isFastifyAdaptor, req);
+      } else { 
+        return this.getTenantFromRequest(isFastifyAdaptor, req, tenantIdentifier);
       }
 
-      return this.getTenantFromRequest(isFastifyAdaptor, req, tenantIdentifier);
+     } else if(contextType === 'rpc') {
+        // do something that is only important in the context of Microservice requests
+ 
+        // inside microservice call..
+        // just return a property from the sent data object -- could be dynamic using tenantIdentifier
+     
+        return this.getTenantFromMicroserviceRequest(data, tenantIdentifier);
+   
+    } else if(contextType === 'ws') {
+        // do something that is only important in the context of Websocket requests
+ 
+        return this.getTenantFromWebsocketRequest(data, tenantIdentifier);
     }
+
+    return '';
+
   }
 
+
+  
+  
+    /**
+   * Get the Tenant information from the request object
+   *
+   * @private
+   * @static 
+   * @param {RmqData} data
+   * @param {string} tenantIdentifier
+   * @returns
+   * @memberof TenancyCoreModule
+   */
+     private static getTenantFromWebsocketRequest( 
+      data: any,
+      tenantIdentifier: string,
+    ): string {
+      // could be extended later
+      
+      let tenantId = data[tenantIdentifier]; 
+  
+      // Validate if tenant id is present
+      if (this.isEmpty(tenantId)) {
+        throw new RpcException(`${tenantIdentifier} is not supplied`);
+      }
+  
+      return tenantId;
+    }
+
+  /**
+   * Get the Tenant information from the request object
+   *
+   * @private
+   * @static 
+   * @param {RmqData} data
+   * @param {string} tenantIdentifier
+   * @returns
+   * @memberof TenancyCoreModule
+   */
+   private static getTenantFromMicroserviceRequest( 
+    data: any,
+    tenantIdentifier: string,
+  ): string {
+
+    // could be extended later
+      
+    let tenantId = data[tenantIdentifier]; 
+
+    // Validate if tenant id is present
+    if (this.isEmpty(tenantId)) {
+      throw new RpcException(`${tenantIdentifier} is not supplied`);
+    }
+
+    return tenantId;
+  }
   /**
    * Get the Tenant information from the request object
    *
@@ -235,8 +332,9 @@ export class TenancyCoreModule implements OnApplicationShutdown {
     req: Request,
     tenantIdentifier: string,
   ) {
-    let tenantId = '';
 
+    let tenantId = '';
+   
     if (isFastifyAdaptor) {
       // For Fastify
       // Get the tenant id from the header
@@ -248,6 +346,7 @@ export class TenancyCoreModule implements OnApplicationShutdown {
       // Get the tenant id from the request
       tenantId = req.get(`${tenantIdentifier}`) || '';
     }
+    
 
     // Validate if tenant id is present
     if (this.isEmpty(tenantId)) {
@@ -417,11 +516,11 @@ export class TenancyCoreModule implements OnApplicationShutdown {
       provide: TENANT_CONTEXT,
       scope: Scope.REQUEST,
       useFactory: (
-        req: Request,
+        context: RequestContext & Request, 
         moduleOptions: TenancyModuleOptions,
         adapterHost: HttpAdapterHost,
-      ) => this.getTenant(req, moduleOptions, adapterHost),
-      inject: [REQUEST, TENANT_MODULE_OPTIONS, DEFAULT_HTTP_ADAPTER_HOST],
+      ) => this.getTenant(context, moduleOptions, adapterHost),
+      inject: [CONTEXT, TENANT_MODULE_OPTIONS, DEFAULT_HTTP_ADAPTER_HOST],
     };
   }
 
