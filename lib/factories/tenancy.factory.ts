@@ -1,5 +1,5 @@
 import { Provider } from '@nestjs/common';
-import { Connection } from 'mongoose';
+import { Connection, Model } from 'mongoose';
 import { ModelDefinition } from '../interfaces';
 import {
   CONNECTION_MAP,
@@ -25,13 +25,13 @@ export const createTenancyProviders = (
         connectionMap: ConnectionMap,
       ) => {
         const exists = modelDefinitionMap.has(name);
-        if (!exists) {
-          modelDefinitionMap.set(name, { ...definition });
+        if (exists) return;
 
-          connectionMap.forEach((connection: Connection) => {
-            connection.model(name, schema, collection);
-          });
-        }
+        modelDefinitionMap.set(name, { ...definition });
+
+        connectionMap.forEach((connection: Connection) => {
+          connection.model(name, schema, collection);
+        });
       },
       inject: [MODEL_DEFINITION_MAP, CONNECTION_MAP],
     });
@@ -47,6 +47,33 @@ export const createTenancyProviders = (
       },
       inject: [TENANT_CONNECTION],
     });
+
+    // Create descriminators
+    const discriminators = definition.discriminators || [];
+    providers.push(
+      ...discriminators.map((discriminator) => ({
+        provide: getTenantModelToken(discriminator.name),
+        useFactory: (
+          baseModel: Model<Document>,
+          tenantConnection: Connection,
+        ) => {
+          const modelOnConnection = tenantConnection.models[discriminator.name];
+          if (modelOnConnection) return modelOnConnection;
+
+          const discriminatorModel = baseModel.discriminator(
+            discriminator.name,
+            discriminator.schema,
+            discriminator.value,
+          );
+          return tenantConnection.model(
+            discriminator.name,
+            discriminatorModel.schema,
+            collection,
+          );
+        },
+        inject: [getTenantModelToken(name), TENANT_CONNECTION],
+      })),
+    );
   }
 
   // Return the list of providers mapping
