@@ -1,4 +1,4 @@
-import { Provider } from '@nestjs/common';
+import { Provider, Scope } from '@nestjs/common';
 import { Connection } from 'mongoose';
 import { ModelDefinition } from '../interfaces';
 import {
@@ -43,6 +43,7 @@ export const createTenancyProviders = (
     // TENANT_CONNECTION is first resolved, leading to undefined models.
     providers.push({
       provide: getTenantModelToken(name),
+      scope: Scope.REQUEST,
       useFactory(_definition: void, tenantConnection: Connection) {
         if (!tenantConnection) {
           throw new Error(
