@@ -17,6 +17,7 @@ import {
   TenancyModuleOptions,
   TenancyOptionsFactory,
 } from './interfaces';
+import { TenancyService } from './tenancy.service';
 import {
   CONNECTION_MAP,
   DEFAULT_HTTP_ADAPTER_HOST,
@@ -90,6 +91,7 @@ export class TenancyCoreModule implements OnApplicationShutdown {
       modelDefinitionMapProvider,
       tenantConnectionProvider,
       httpAdapterHost,
+      TenancyService,
     ];
 
     return {
@@ -154,6 +156,7 @@ export class TenancyCoreModule implements OnApplicationShutdown {
       modelDefinitionMapProvider,
       tenantConnectionProvider,
       httpAdapterHost,
+      TenancyService,
     ];
 
     return {
@@ -522,7 +525,7 @@ export class TenancyCoreModule implements OnApplicationShutdown {
    * @memberof TenancyCoreModule
    */
   private static adapterIsFastify(adapterHost: HttpAdapterHost): boolean {
-    return adapterHost.httpAdapter.getType() === 'fastify';
+    return adapterHost?.httpAdapter?.getType() === 'fastify';
   }
 
   /**
