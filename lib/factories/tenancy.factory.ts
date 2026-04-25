@@ -37,15 +37,22 @@ export const createTenancyProviders = (
     });
 
     // Creating Models with connections attached
+    // NOTE: We inject the definition token to guarantee NestJS resolves it
+    // BEFORE the model provider. Without this dependency, forwardRef can cause
+    // the definition to not be registered in MODEL_DEFINITION_MAP when the
+    // TENANT_CONNECTION is first resolved, leading to undefined models.
     providers.push({
       provide: getTenantModelToken(name),
-      useFactory(tenantConnection: Connection) {
+      useFactory(_definition: void, tenantConnection: Connection) {
+        if (!tenantConnection) {
+          return undefined;
+        }
         return (
           tenantConnection.models[name] ||
           tenantConnection.model(name, schema, collection)
         );
       },
-      inject: [TENANT_CONNECTION],
+      inject: [getTenantModelDefinitionToken(name), TENANT_CONNECTION],
     });
   }
 
