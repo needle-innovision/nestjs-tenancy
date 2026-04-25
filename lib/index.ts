@@ -5,3 +5,4 @@ export * from './decorators';
 export * from './utils';
 export * from './factories';
 export * from './tenancy.module';
+export * from './tenancy.service';

@@ -328,6 +328,49 @@ mongoose to automatically initialize the empty collection for us. In that case
 we can make use of the property in `TenancyModuleOptions` which is `forceCreateCollections: true`
 (set to false by default) to automatically initialize all collections that are mapped to `TenancyModule`.
 
+## Running tenant-scoped code outside an HTTP request
+
+By default, the tenant id is read from the incoming HTTP request. When you need
+tenant-scoped operations from a context where no HTTP request exists — scheduled
+jobs (`@Cron`), event handlers (`@OnEvent`), microservice handlers, WebSocket
+gateways — use the injectable `TenancyService.run()` helper. It builds a request
+scope around your callback so all `REQUEST`-scoped providers (`TENANT_CONTEXT`,
+`TENANT_CONNECTION`, all tenant models) resolve correctly.
+
+```typescript
+import { Injectable } from '@nestjs/common';
+import { Cron } from '@nestjs/schedule';
+import { TenancyService } from '@needle-innovision/nestjs-tenancy';
+import { CatsService } from './cats/cats.service';
+
+@Injectable()
+export class CatJobs {
+    constructor(private readonly tenancy: TenancyService) {}
+
+    // Resolve a single service for a tenant
+    @Cron('0 * * * *')
+    async hourlyCleanupForTenantA() {
+        await this.tenancy.run('tenant-a', CatsService, async (cats) => {
+            await cats.archiveStale();
+        });
+    }
+
+    // Resolve multiple services in one tenant scope
+    async migrateTenant(tenantId: string) {
+        await this.tenancy.run(tenantId, async (resolve) => {
+            const cats = await resolve(CatsService);
+            const audit = await resolve(AuditService);
+            await cats.migrate();
+            await audit.record('migration-complete');
+        });
+    }
+}
+```
+
+The first form is the simple case: pass a service type and a callback that
+receives the resolved instance. The second form gives you a `resolve()` function
+when you need more than one service inside the same tenant scope.
+
 ## Requirements
 
 1. @nest/mongoose ^6.x.x || ^8.x.x || ^9.x.x
