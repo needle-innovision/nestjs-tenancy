@@ -8,7 +8,7 @@ import {
   Scope,
 } from '@nestjs/common';
 import { Type } from '@nestjs/common/interfaces';
-import { HttpAdapterHost, ModuleRef, REQUEST } from '@nestjs/core';
+import { HttpAdapterHost, REQUEST } from '@nestjs/core';
 import { Request } from 'express';
 import { Connection, createConnection, Model } from 'mongoose';
 import { ConnectionOptions } from 'tls';
@@ -18,6 +18,7 @@ import {
   TenancyOptionsFactory,
 } from './interfaces';
 import {
+  BASE_CONNECTION_MAP,
   CONNECTION_MAP,
   DEFAULT_HTTP_ADAPTER_HOST,
   MODEL_DEFINITION_MAP,
@@ -30,7 +31,13 @@ import { ConnectionMap, ModelDefinitionMap } from './types';
 @Global()
 @Module({})
 export class TenancyCoreModule implements OnApplicationShutdown {
-  constructor(private readonly moduleRef: ModuleRef) {}
+  // Track pending connections to prevent race conditions
+  private static pendingConnections: Map<string, Promise<Connection>> =
+    new Map();
+  // Track which connections have handlers set up to prevent duplicates
+  private static connectionsWithHandlers: Set<string> = new Set();
+  // Store base connection map for cleanup on shutdown
+  private static baseConnectionMapInstance: ConnectionMap | null = null;
 
   /**
    * Register for synchornous modules
@@ -59,18 +66,23 @@ export class TenancyCoreModule implements OnApplicationShutdown {
     /* Http Adaptor */
     const httpAdapterHost = this.createHttpAdapterProvider();
 
+    /* Base Connection Map */
+    const baseConnectionMapProvider = this.createBaseConnectionMapProvider();
+
     /* Tenant Connection */
     const tenantConnectionProvider = {
       provide: TENANT_CONNECTION,
       useFactory: async (
         tenantId: string,
         moduleOptions: TenancyModuleOptions,
+        baseConnMap: ConnectionMap,
         connMap: ConnectionMap,
         modelDefMap: ModelDefinitionMap,
       ): Promise<Connection> => {
         return await this.getConnection(
           tenantId,
           moduleOptions,
+          baseConnMap,
           connMap,
           modelDefMap,
         );
@@ -78,6 +90,7 @@ export class TenancyCoreModule implements OnApplicationShutdown {
       inject: [
         TENANT_CONTEXT,
         TENANT_MODULE_OPTIONS,
+        BASE_CONNECTION_MAP,
         CONNECTION_MAP,
         MODEL_DEFINITION_MAP,
       ],
@@ -88,6 +101,7 @@ export class TenancyCoreModule implements OnApplicationShutdown {
       tenantContextProvider,
       connectionMapProvider,
       modelDefinitionMapProvider,
+      baseConnectionMapProvider,
       tenantConnectionProvider,
       httpAdapterHost,
     ];
@@ -120,18 +134,23 @@ export class TenancyCoreModule implements OnApplicationShutdown {
     /* Http Adaptor */
     const httpAdapterHost = this.createHttpAdapterProvider();
 
+    /* Base Connection Map */
+    const baseConnectionMapProvider = this.createBaseConnectionMapProvider();
+
     /* Tenant Connection */
     const tenantConnectionProvider = {
       provide: TENANT_CONNECTION,
       useFactory: async (
         tenantId: string,
         moduleOptions: TenancyModuleOptions,
+        baseConnMap: ConnectionMap,
         connMap: ConnectionMap,
         modelDefMap: ModelDefinitionMap,
       ): Promise<Connection> => {
         return await this.getConnection(
           tenantId,
           moduleOptions,
+          baseConnMap,
           connMap,
           modelDefMap,
         );
@@ -139,6 +158,7 @@ export class TenancyCoreModule implements OnApplicationShutdown {
       inject: [
         TENANT_CONTEXT,
         TENANT_MODULE_OPTIONS,
+        BASE_CONNECTION_MAP,
         CONNECTION_MAP,
         MODEL_DEFINITION_MAP,
       ],
@@ -152,6 +172,7 @@ export class TenancyCoreModule implements OnApplicationShutdown {
       tenantContextProvider,
       connectionMapProvider,
       modelDefinitionMapProvider,
+      baseConnectionMapProvider,
       tenantConnectionProvider,
       httpAdapterHost,
     ];
@@ -170,13 +191,14 @@ export class TenancyCoreModule implements OnApplicationShutdown {
    * @memberof TenantCoreModule
    */
   async onApplicationShutdown() {
-    // Map of all connections
-    const connectionMap: ConnectionMap = this.moduleRef.get(CONNECTION_MAP);
-
-    // Remove all stray connections
-    await Promise.all(
-      [...connectionMap.values()].map((connection) => connection.close()),
-    );
+    // Close all base connections (tenant connections are derived from them)
+    if (TenancyCoreModule.baseConnectionMapInstance) {
+      await Promise.all(
+        [...TenancyCoreModule.baseConnectionMapInstance.values()].map(
+          (connection) => connection.close(),
+        ),
+      );
+    }
   }
 
   /**
@@ -303,6 +325,7 @@ export class TenancyCoreModule implements OnApplicationShutdown {
    * @static
    * @param {String} tenantId
    * @param {TenancyModuleOptions} moduleOptions
+   * @param {ConnectionMap} baseConnMap
    * @param {ConnectionMap} connMap
    * @param {ModelDefinitionMap} modelDefMap
    * @returns {Promise<Connection>}
@@ -311,6 +334,7 @@ export class TenancyCoreModule implements OnApplicationShutdown {
   private static async getConnection(
     tenantId: string,
     moduleOptions: TenancyModuleOptions,
+    baseConnMap: ConnectionMap,
     connMap: ConnectionMap,
     modelDefMap: ModelDefinitionMap,
   ): Promise<Connection> {
@@ -330,7 +354,7 @@ export class TenancyCoreModule implements OnApplicationShutdown {
         // For transactional support the Models/Collections has exist in the
         // tenant database, otherwise it will throw error
         await Promise.all(
-          Object.entries(connection.models).map(([k, m]) =>
+          Object.entries(connection.models).map(([, m]) =>
             m.createCollection(),
           ),
         );
@@ -339,39 +363,298 @@ export class TenancyCoreModule implements OnApplicationShutdown {
       return connection;
     }
 
-    // Otherwise create a new connection
+    // Get the full URI for this tenant
     const uri = await Promise.resolve(moduleOptions.uri(tenantId));
-    // Connection options
+
+    // Extract the base URI (cluster) and database name
+    const baseUri = this.extractBaseUri(uri);
+    const dbName = this.extractDatabaseName(uri, tenantId);
+
+    // Get or create a base connection for this cluster
+    let baseConnection = baseConnMap.get(baseUri);
+    const needsReconnection =
+      baseConnection &&
+      (baseConnection.readyState === 0 ||
+        baseConnection.readyState === 3 ||
+        baseConnection.readyState === 99);
+
+    if (!baseConnection || needsReconnection) {
+      // Check if another request is already creating this connection
+      const pendingConnection = this.pendingConnections.get(baseUri);
+      if (pendingConnection) {
+        // Wait for the other request to finish creating the connection
+        baseConnection = await pendingConnection;
+      } else {
+        // Create the connection and track it as pending
+        const connectionPromise = this.createBaseConnection(
+          uri,
+          baseUri,
+          moduleOptions,
+          baseConnMap,
+          connMap,
+          needsReconnection,
+        );
+        this.pendingConnections.set(baseUri, connectionPromise);
+
+        try {
+          baseConnection = await connectionPromise;
+        } finally {
+          // Remove from pending once complete
+          this.pendingConnections.delete(baseUri);
+        }
+      }
+    }
+
+    // Use the base connection to switch to the tenant's database
+    // This reuses the connection pool for the cluster
+    const connection = baseConnection.useDb(dbName);
+
+    // Attach connection to the models passed in the map
+    const modelPromises: Promise<void>[] = [];
+    modelDefMap.forEach((definition: any) => {
+      const { name, schema, collection } = definition;
+
+      const modelCreated = connection.model(name, schema, collection);
+
+      if (moduleOptions.forceCreateCollections) {
+        // For transactional support the Models/Collections has exist in the
+        // tenant database, otherwise it will throw error
+        modelPromises.push(modelCreated.createCollection());
+      }
+    });
+
+    // Wait for all collections to be created
+    if (modelPromises.length > 0) {
+      await Promise.all(modelPromises);
+    }
+
+    // Add the new connection to the map
+    connMap.set(tenantId, connection);
+
+    return connection;
+  }
+
+  /**
+   * Create a new base connection for a cluster
+   *
+   * @private
+   * @static
+   * @param {string} uri
+   * @param {string} baseUri
+   * @param {TenancyModuleOptions} moduleOptions
+   * @param {ConnectionMap} baseConnMap
+   * @param {ConnectionMap} connMap
+   * @param {boolean} isReconnection
+   * @returns {Promise<Connection>}
+   * @memberof TenancyCoreModule
+   */
+  private static async createBaseConnection(
+    uri: string,
+    baseUri: string,
+    moduleOptions: TenancyModuleOptions,
+    baseConnMap: ConnectionMap,
+    connMap: ConnectionMap,
+    isReconnection: boolean,
+  ): Promise<Connection> {
+    if (isReconnection) {
+      // Connection exists but is disconnected
+      const oldConnection = baseConnMap.get(baseUri);
+      if (oldConnection) {
+        // Clean up old connection
+        try {
+          await oldConnection.close();
+        } catch (error) {
+          // Ignore errors when closing dead connection
+        }
+      }
+      // Clear tenant connections for this cluster
+      this.clearTenantConnectionsForCluster(connMap, baseUri);
+      // Clear handler tracking for old connection
+      this.connectionsWithHandlers.delete(baseUri);
+    }
+
+    // Create a new base connection for this cluster
     const connectionOptions: ConnectionOptions = {
       useNewUrlParser: true,
       useUnifiedTopology: true,
       ...moduleOptions.options(),
     };
 
-    // Create the connection
-    const connection = createConnection(uri, connectionOptions);
+    // For the base connection, connect without a specific database
+    // or use 'admin' database if authentication is required
+    const baseConnectionUri = this.buildBaseConnectionUri(uri, baseUri);
+    const baseConnection = createConnection(
+      baseConnectionUri,
+      connectionOptions,
+    );
+    baseConnMap.set(baseUri, baseConnection);
 
-    // Attach connection to the models passed in the map
-    modelDefMap.forEach(async (definition: any) => {
-      const { name, schema, collection } = definition;
-
-      const modelCreated: Model<unknown> = connection.model(
-        name,
-        schema,
-        collection,
+    // Set up automatic reconnection handlers (only once per connection)
+    if (!this.connectionsWithHandlers.has(baseUri)) {
+      this.setupConnectionHandlers(
+        baseConnection,
+        baseUri,
+        connMap,
+        baseConnMap,
       );
+      this.connectionsWithHandlers.add(baseUri);
+    }
 
-      if (moduleOptions.forceCreateCollections) {
-        // For transactional support the Models/Collections has exist in the
-        // tenant database, otherwise it will throw error
-        await modelCreated.createCollection();
+    // Wait for the connection to be ready
+    await new Promise<void>((resolve, reject) => {
+      if (baseConnection.readyState === 1) {
+        resolve();
+      } else {
+        baseConnection.once('open', () => resolve());
+        baseConnection.once('error', reject);
       }
     });
 
-    // Add the new connection to the map
-    connMap.set(tenantId, connection);
+    return baseConnection;
+  }
 
-    return connection;
+  /**
+   * Setup connection event handlers for transparent reconnection
+   *
+   * @private
+   * @static
+   * @param {Connection} connection
+   * @param {string} baseUri
+   * @param {ConnectionMap} connMap
+   * @param {ConnectionMap} baseConnMap
+   * @memberof TenancyCoreModule
+   */
+  private static setupConnectionHandlers(
+    connection: Connection,
+    baseUri: string,
+    connMap: ConnectionMap,
+    baseConnMap: ConnectionMap,
+  ): void {
+    // Handle disconnection events
+    connection.on('disconnected', () => {
+      try {
+        console.warn(
+          `[TenancyModule] Base connection disconnected for cluster: ${baseUri}`,
+        );
+        // Clear tenant connections so they get recreated on next request
+        this.clearTenantConnectionsForCluster(connMap, baseUri);
+        // Mark handlers as needing to be re-setup on reconnection
+        this.connectionsWithHandlers.delete(baseUri);
+      } catch (error) {
+        console.error(
+          `[TenancyModule] Error handling disconnection for cluster: ${baseUri}`,
+          error,
+        );
+      }
+    });
+
+    // Handle reconnection events
+    connection.on('reconnected', () => {
+      console.log(
+        `[TenancyModule] Base connection reconnected for cluster: ${baseUri}`,
+      );
+    });
+
+    // Handle connection errors
+    connection.on('error', (error) => {
+      console.error(
+        `[TenancyModule] Base connection error for cluster: ${baseUri}`,
+        error.message,
+      );
+    });
+
+    // Handle connection close
+    connection.on('close', () => {
+      try {
+        console.warn(
+          `[TenancyModule] Base connection closed for cluster: ${baseUri}`,
+        );
+        // Remove from base connection map
+        baseConnMap.delete(baseUri);
+        this.connectionsWithHandlers.delete(baseUri);
+      } catch (error) {
+        console.error(
+          `[TenancyModule] Error handling close for cluster: ${baseUri}`,
+          error,
+        );
+      }
+    });
+  }
+
+  /**
+   * Clear tenant connections for a specific cluster
+   *
+   * @private
+   * @static
+   * @param {ConnectionMap} connMap
+   * @param {string} baseUri
+   * @memberof TenancyCoreModule
+   */
+  private static clearTenantConnectionsForCluster(
+    connMap: ConnectionMap,
+    baseUri: string,
+  ): void {
+    try {
+      // Extract host from baseUri for matching
+      const baseHostMatch = baseUri.match(/:\/\/([^@]*@)?([^/]+)/);
+      const baseHost = baseHostMatch ? baseHostMatch[2] : null;
+
+      // Find and remove all tenant connections that belong to this cluster
+      const keysToDelete: string[] = [];
+      connMap.forEach((connection, tenantId) => {
+        try {
+          // Check if this tenant connection belongs to the disconnected cluster
+          const connHost = connection.host;
+
+          // Match if hosts are the same or if connection host is part of base URI
+          if (
+            (baseHost && connHost && connHost === baseHost) ||
+            (connHost && baseUri.includes(connHost))
+          ) {
+            keysToDelete.push(tenantId);
+          }
+        } catch (error) {
+          // If we can't determine, keep the connection (safer than removing)
+          console.warn(
+            `[TenancyModule] Could not check connection host for tenant: ${tenantId}`,
+          );
+        }
+      });
+
+      // Remove the stale connections
+      keysToDelete.forEach((key) => connMap.delete(key));
+
+      if (keysToDelete.length > 0) {
+        console.log(
+          `[TenancyModule] Cleared ${keysToDelete.length} tenant connection(s) for cluster`,
+        );
+      }
+    } catch (error) {
+      console.error(
+        `[TenancyModule] Error clearing tenant connections for cluster: ${baseUri}`,
+        error,
+      );
+    }
+  }
+
+  /**
+   * Create base connection map provider
+   *
+   * @private
+   * @static
+   * @returns {Provider}
+   * @memberof TenancyCoreModule
+   */
+  private static createBaseConnectionMapProvider(): Provider {
+    return {
+      provide: BASE_CONNECTION_MAP,
+      useFactory: (): ConnectionMap => {
+        // Create and store the map instance for shutdown cleanup
+        const map = new Map();
+        TenancyCoreModule.baseConnectionMapInstance = map;
+        return map;
+      },
+    };
   }
 
   /**
@@ -498,6 +781,101 @@ export class TenancyCoreModule implements OnApplicationShutdown {
       useFactory: (adapterHost: HttpAdapterHost) => adapterHost,
       inject: [HttpAdapterHost],
     };
+  }
+
+  /**
+   * Build base connection URI for cluster
+   *
+   * @private
+   * @static
+   * @param {string} fullUri
+   * @param {string} baseUri
+   * @returns {string}
+   * @memberof TenancyCoreModule
+   */
+  private static buildBaseConnectionUri(
+    fullUri: string,
+    baseUri: string,
+  ): string {
+    try {
+      // Extract query parameters (including auth source) from original URI
+      const queryMatch = fullUri.match(/\?(.+)$/);
+      const queryParams = queryMatch ? `?${queryMatch[1]}` : '';
+
+      // Check if authSource is already specified in query parameters
+      const hasAuthSource = queryParams.includes('authSource=');
+
+      if (hasAuthSource) {
+        // authSource is already in query params, no need to add database to path
+        // Just use base URI with the query parameters
+        return `${baseUri}${queryParams}`;
+      }
+
+      // Check if the original URI has authentication in the connection string
+      const hasAuth = fullUri.match(/:\/\/([^@]+)@/);
+
+      if (hasAuth) {
+        // Authentication present but no authSource in query params
+        // Connect to admin database by default for authentication
+        return `${baseUri}/admin${queryParams}`;
+      }
+
+      // No authentication, just use base URI with query params
+      return `${baseUri}${queryParams}`;
+    } catch (error) {
+      // Fallback to base URI
+      return baseUri;
+    }
+  }
+
+  /**
+   * Extract base URI (cluster URL without database name) from MongoDB URI
+   *
+   * @private
+   * @static
+   * @param {string} uri
+   * @returns {string}
+   * @memberof TenancyCoreModule
+   */
+  private static extractBaseUri(uri: string): string {
+    try {
+      // Remove the database name from the URI to get the base cluster URI
+      // Format: mongodb://host:port/dbname -> mongodb://host:port
+      // Format: mongodb+srv://host/dbname?options -> mongodb+srv://host?options
+      const match = uri.match(/^(mongodb(?:\+srv)?:\/\/[^/]+)/);
+      if (match && match[1]) {
+        return match[1];
+      }
+    } catch (error) {
+      // If extraction fails, return the full URI as fallback
+    }
+    return uri;
+  }
+
+  /**
+   * Extract database name from MongoDB URI
+   *
+   * @private
+   * @static
+   * @param {string} uri
+   * @param {string} tenantId
+   * @returns {string}
+   * @memberof TenancyCoreModule
+   */
+  private static extractDatabaseName(uri: string, tenantId: string): string {
+    try {
+      // Try to extract database name from URI
+      // Format: mongodb://host:port/dbname or mongodb+srv://host/dbname
+      const match = uri.match(/\/([^/?]+)(\?|$)/);
+      if (match && match[1]) {
+        return match[1];
+      }
+    } catch (error) {
+      // If extraction fails, fall back to tenant ID
+    }
+
+    // Default to using tenant ID as database name
+    return tenantId;
   }
 
   /**
