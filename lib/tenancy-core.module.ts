@@ -307,15 +307,18 @@ export class TenancyCoreModule implements OnApplicationShutdown {
     if (exists) {
       const connection = connMap.get(tenantId) as Connection;
 
-      // Ensure all model definitions are registered on the cached connection.
-      // This handles the case where new feature modules (especially via forwardRef)
-      // registered model definitions AFTER this connection was originally created.
-      modelDefMap.forEach((definition: any) => {
-        const { name, schema, collection } = definition;
-        if (!connection.models[name]) {
-          connection.model(name, schema, collection);
-        }
-      });
+      // Only re-register models if new definitions were added since this
+      // connection was cached (e.g. lazy-loaded feature modules).
+      // The model provider factory also has a fallback, so this is belt-and-suspenders.
+      const registeredCount = Object.keys(connection.models).length;
+      if (registeredCount < modelDefMap.size) {
+        modelDefMap.forEach((definition: any) => {
+          const { name, schema, collection } = definition;
+          if (!connection.models[name]) {
+            connection.model(name, schema, collection);
+          }
+        });
+      }
 
       if (moduleOptions.forceCreateCollections) {
         // For transactional support the Models/Collections has exist in the
