@@ -70,31 +70,8 @@ export class TenancyCoreModule implements OnApplicationShutdown {
     const baseConnectionMapProvider = this.createBaseConnectionMapProvider();
 
     /* Tenant Connection */
-    const tenantConnectionProvider = {
-      provide: TENANT_CONNECTION,
-      useFactory: async (
-        tenantId: string,
-        moduleOptions: TenancyModuleOptions,
-        baseConnMap: ConnectionMap,
-        connMap: ConnectionMap,
-        modelDefMap: ModelDefinitionMap,
-      ): Promise<Connection> => {
-        return await this.getConnection(
-          tenantId,
-          moduleOptions,
-          baseConnMap,
-          connMap,
-          modelDefMap,
-        );
-      },
-      inject: [
-        TENANT_CONTEXT,
-        TENANT_MODULE_OPTIONS,
-        BASE_CONNECTION_MAP,
-        CONNECTION_MAP,
-        MODEL_DEFINITION_MAP,
-      ],
-    };
+    const tenantConnectionProvider =
+      this.createTenantConnectionProvider();
 
     const providers = [
       tenancyModuleOptionsProvider,
@@ -138,31 +115,8 @@ export class TenancyCoreModule implements OnApplicationShutdown {
     const baseConnectionMapProvider = this.createBaseConnectionMapProvider();
 
     /* Tenant Connection */
-    const tenantConnectionProvider = {
-      provide: TENANT_CONNECTION,
-      useFactory: async (
-        tenantId: string,
-        moduleOptions: TenancyModuleOptions,
-        baseConnMap: ConnectionMap,
-        connMap: ConnectionMap,
-        modelDefMap: ModelDefinitionMap,
-      ): Promise<Connection> => {
-        return await this.getConnection(
-          tenantId,
-          moduleOptions,
-          baseConnMap,
-          connMap,
-          modelDefMap,
-        );
-      },
-      inject: [
-        TENANT_CONTEXT,
-        TENANT_MODULE_OPTIONS,
-        BASE_CONNECTION_MAP,
-        CONNECTION_MAP,
-        MODEL_DEFINITION_MAP,
-      ],
-    };
+    const tenantConnectionProvider =
+      this.createTenantConnectionProvider();
 
     /* Asyc providers */
     const asyncProviders = this.createAsyncProviders(options);
@@ -694,6 +648,43 @@ export class TenancyCoreModule implements OnApplicationShutdown {
     return {
       provide: MODEL_DEFINITION_MAP,
       useFactory: (): ModelDefinitionMap => new Map(),
+    };
+  }
+
+  /**
+   * Create tenant connection provider
+   *
+   * @private
+   * @static
+   * @returns {Provider}
+   * @memberof TenancyCoreModule
+   */
+  private static createTenantConnectionProvider(): Provider {
+    return {
+      provide: TENANT_CONNECTION,
+      scope: Scope.REQUEST,
+      useFactory: async (
+        tenantId: string,
+        moduleOptions: TenancyModuleOptions,
+        baseConnMap: ConnectionMap,
+        connMap: ConnectionMap,
+        modelDefMap: ModelDefinitionMap,
+      ): Promise<Connection> => {
+        return await this.getConnection(
+          tenantId,
+          moduleOptions,
+          baseConnMap,
+          connMap,
+          modelDefMap,
+        );
+      },
+      inject: [
+        TENANT_CONTEXT,
+        TENANT_MODULE_OPTIONS,
+        BASE_CONNECTION_MAP,
+        CONNECTION_MAP,
+        MODEL_DEFINITION_MAP,
+      ],
     };
   }
 
