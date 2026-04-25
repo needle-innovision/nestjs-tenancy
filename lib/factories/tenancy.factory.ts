@@ -1,4 +1,4 @@
-import { Provider } from '@nestjs/common';
+import { Provider, Scope } from '@nestjs/common';
 import { Connection } from 'mongoose';
 import { ModelDefinition } from '../interfaces';
 import {
@@ -37,15 +37,27 @@ export const createTenancyProviders = (
     });
 
     // Creating Models with connections attached
+    // NOTE: We inject the definition token to guarantee NestJS resolves it
+    // BEFORE the model provider. Without this dependency, forwardRef can cause
+    // the definition to not be registered in MODEL_DEFINITION_MAP when the
+    // TENANT_CONNECTION is first resolved, leading to undefined models.
     providers.push({
       provide: getTenantModelToken(name),
-      useFactory(tenantConnection: Connection) {
+      scope: Scope.REQUEST,
+      useFactory(_definition: void, tenantConnection: Connection) {
+        if (!tenantConnection) {
+          throw new Error(
+            `[TenancyModule] Tenant connection is null for model "${name}". ` +
+              `Ensure the module importing TenancyModule.forFeature() is within a request scope ` +
+              `that provides a valid tenant context.`,
+          );
+        }
         return (
           tenantConnection.models[name] ||
           tenantConnection.model(name, schema, collection)
         );
       },
-      inject: [TENANT_CONNECTION],
+      inject: [getTenantModelDefinitionToken(name), TENANT_CONNECTION],
     });
   }
 
