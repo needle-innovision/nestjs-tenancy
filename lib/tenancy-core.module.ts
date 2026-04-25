@@ -10,8 +10,7 @@ import {
 import { Type } from '@nestjs/common/interfaces';
 import { HttpAdapterHost, ModuleRef, REQUEST } from '@nestjs/core';
 import { Request } from 'express';
-import { Connection, createConnection, Model } from 'mongoose';
-import { ConnectionOptions } from 'tls';
+import { Connection, ConnectOptions, createConnection } from 'mongoose';
 import {
   TenancyModuleAsyncOptions,
   TenancyModuleOptions,
@@ -342,9 +341,7 @@ export class TenancyCoreModule implements OnApplicationShutdown {
     // Otherwise create a new connection
     const uri = await Promise.resolve(moduleOptions.uri(tenantId));
     // Connection options
-    const connectionOptions: ConnectionOptions = {
-      useNewUrlParser: true,
-      useUnifiedTopology: true,
+    const connectionOptions: ConnectOptions = {
       ...moduleOptions.options(),
     };
 
@@ -355,11 +352,7 @@ export class TenancyCoreModule implements OnApplicationShutdown {
     modelDefMap.forEach(async (definition: any) => {
       const { name, schema, collection } = definition;
 
-      const modelCreated: Model<unknown> = connection.model(
-        name,
-        schema,
-        collection,
-      );
+      const modelCreated = connection.model(name, schema, collection);
 
       if (moduleOptions.forceCreateCollections) {
         // For transactional support the Models/Collections has exist in the
