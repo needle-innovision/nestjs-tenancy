@@ -1,8 +1,7 @@
-import { DynamicModule, Global, Module } from '@nestjs/common';
+import { DynamicModule, Module } from '@nestjs/common';
 import { createTenancyProviders } from './factories';
 import { ModelDefinition } from './interfaces';
 
-@Global()
 @Module({})
 export class TenancyFeatureModule {
   static register(models: ModelDefinition[]): DynamicModule {

@@ -45,7 +45,11 @@ export const createTenancyProviders = (
       provide: getTenantModelToken(name),
       useFactory(_definition: void, tenantConnection: Connection) {
         if (!tenantConnection) {
-          return undefined;
+          throw new Error(
+            `[TenancyModule] Tenant connection is null for model "${name}". ` +
+              `Ensure the module importing TenancyModule.forFeature() is within a request scope ` +
+              `that provides a valid tenant context.`,
+          );
         }
         return (
           tenantConnection.models[name] ||

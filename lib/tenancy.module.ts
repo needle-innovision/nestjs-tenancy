@@ -1,11 +1,11 @@
 import { DynamicModule, Module } from '@nestjs/common';
+import { createTenancyProviders } from './factories';
 import {
   ModelDefinition,
   TenancyModuleAsyncOptions,
   TenancyModuleOptions,
 } from './interfaces';
 import { TenancyCoreModule } from './tenancy-core.module';
-import { TenancyFeatureModule } from './tenancy-feature.module';
 
 /**
  * Module to help with multi tenancy
@@ -75,9 +75,12 @@ export class TenancyModule {
    * @memberof TenancyModule
    */
   static forFeature(models: ModelDefinition[]): DynamicModule {
+    const providers = createTenancyProviders(models);
+
     return {
       module: TenancyModule,
-      imports: [TenancyFeatureModule.register(models)],
+      providers,
+      exports: providers,
     };
   }
 }
