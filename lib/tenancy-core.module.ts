@@ -31,8 +31,11 @@ import { ConnectionMap, ModelDefinitionMap } from './types';
 @Global()
 @Module({})
 export class TenancyCoreModule implements OnApplicationShutdown {
-  // Track pending connections to prevent race conditions
+  // Track pending base connections to prevent race conditions
   private static pendingConnections: Map<string, Promise<Connection>> =
+    new Map();
+  // Track pending tenant connections to prevent race conditions
+  private static pendingTenantConnections: Map<string, Promise<Connection>> =
     new Map();
   // Track which connections have handlers set up to prevent duplicates
   private static connectionsWithHandlers: Set<string> = new Set();
@@ -327,6 +330,49 @@ export class TenancyCoreModule implements OnApplicationShutdown {
       return connection;
     }
 
+    // Check if another request is already creating this tenant's connection
+    const pendingTenantConn = this.pendingTenantConnections.get(tenantId);
+    if (pendingTenantConn) {
+      return await pendingTenantConn;
+    }
+
+    // Create the tenant connection and track it as pending
+    const tenantConnectionPromise = this.createTenantConnection(
+      tenantId,
+      moduleOptions,
+      baseConnMap,
+      connMap,
+      modelDefMap,
+    );
+    this.pendingTenantConnections.set(tenantId, tenantConnectionPromise);
+
+    try {
+      return await tenantConnectionPromise;
+    } finally {
+      this.pendingTenantConnections.delete(tenantId);
+    }
+  }
+
+  /**
+   * Create a new tenant connection (resolve URI, get base connection, useDb)
+   *
+   * @private
+   * @static
+   * @param {string} tenantId
+   * @param {TenancyModuleOptions} moduleOptions
+   * @param {ConnectionMap} baseConnMap
+   * @param {ConnectionMap} connMap
+   * @param {ModelDefinitionMap} modelDefMap
+   * @returns {Promise<Connection>}
+   * @memberof TenancyCoreModule
+   */
+  private static async createTenantConnection(
+    tenantId: string,
+    moduleOptions: TenancyModuleOptions,
+    baseConnMap: ConnectionMap,
+    connMap: ConnectionMap,
+    modelDefMap: ModelDefinitionMap,
+  ): Promise<Connection> {
     // Get the full URI for this tenant
     const uri = await Promise.resolve(moduleOptions.uri(tenantId));
 
@@ -381,8 +427,6 @@ export class TenancyCoreModule implements OnApplicationShutdown {
       const modelCreated = connection.model(name, schema, collection);
 
       if (moduleOptions.forceCreateCollections) {
-        // For transactional support the Models/Collections has exist in the
-        // tenant database, otherwise it will throw error
         modelPromises.push(modelCreated.createCollection());
       }
     });
