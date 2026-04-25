@@ -330,10 +330,11 @@ we can make use of the property in `TenancyModuleOptions` which is `forceCreateC
 
 ## Requirements
 
-1. @nest/mongoose ^6.x.x || ^8.x.x || ^9.x.x
-2. @nestjs/common ^6.x.x || ^8.x.x || ^9.x.x
-3. @nestjs/core ^6.x.x || ^8.x.x || ^9.x.x
-4. mongoose ^5.7.12 (with typings `@types/mongoose`) || ^6.3.8 || ^6.7.0  
+1. `@nestjs/common` ^8.x || ^9.x || ^10.x || ^11.x
+2. `@nestjs/core` ^8.x || ^9.x || ^10.x || ^11.x
+3. `mongoose` ^6.3.8 || ^7.x || ^8.x || ^9.x
+4. `reflect-metadata` ^0.1.13 || ^0.2.0
+5. `rxjs` ^7.x
 
 ## Test
 
